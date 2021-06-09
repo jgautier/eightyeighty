@@ -1,8 +1,52 @@
 use std::thread;
 
-enum Op {
-  NOP = 0x01
+enum Register {
+  A,
+  B,
+  C,
+  D,
+  E,
+  H,
+  L
 }
+
+impl Register {
+  fn to_string(&self) -> &str {
+    match self {
+      Register::A => "A",
+      Register::B => "B",
+      Register::C => "C",
+      Register::D => "D",
+      Register::E => "E",
+      Register::H => "H",
+      Register::L => "L"
+    }
+  }
+}
+
+enum Op {
+  Nop,
+  Incr(Register),
+  Decr(Register),
+  Mov(Register, Register)
+}
+
+impl Op {
+  fn get_size(&self) -> usize {
+    match self {
+      Op::Incr(_) | Op::Nop | Op::Decr(_) | Op::Mov(_,_) => 1,
+    }
+  }
+  fn print(&self) {
+    match self {
+      Op::Incr(reg) => println!("INCR {}", reg.to_string()),
+      Op::Decr(reg) => println!("DECR {}", reg.to_string()),
+      Op::Mov(dest, source) => println!("MOV {},{}", dest.to_string(), source.to_string()),
+      Op::Nop => println!("NOP")
+    }
+  }
+}
+
 struct Flags {
   z: u8,
   s: u8,
@@ -24,6 +68,31 @@ struct State {
   pc: usize,
   memory: [u8; 64000],
   flags: Flags
+}
+
+impl State {
+  fn set_register(&mut self, reg: &Register, value: u8) {
+    match reg {
+      Register::A => self.a = value,
+      Register::B => self.b = value,
+      Register::C => self.c = value,
+      Register::D => self.d = value,
+      Register::E => self.e = value,
+      Register::H => self.h = value,
+      Register::L => self.l = value
+    }
+  }
+  fn get_register(&self, reg: &Register) -> u8 {
+    match reg {
+      Register::A => self.a,
+      Register::B => self.b,
+      Register::C => self.c,
+      Register::D => self.d,
+      Register::E => self.e,
+      Register::H => self.h,
+      Register::L => self.l
+    }
+  }
 }
 
 pub struct Emulator {
@@ -63,10 +132,120 @@ impl Emulator {
     }
   }
 
+  fn read_next_op(&self) -> Result<Op, u8> {
+    let byte = self.state.memory[self.state.pc];
+    match byte {
+      0x04 => Ok(Op::Incr(Register::B)),
+      0x3c => Ok(Op::Incr(Register::A)),
+      0x0c => Ok(Op::Incr(Register::C)),
+      0x14 => Ok(Op::Incr(Register::D)),
+      0x1c => Ok(Op::Incr(Register::E)),
+      0x24 => Ok(Op::Incr(Register::H)),
+      0x2c => Ok(Op::Incr(Register::L)),
+      0x15 => Ok(Op::Decr(Register::D)),
+      0x1d => Ok(Op::Decr(Register::E)),
+      0x25 => Ok(Op::Decr(Register::H)),
+      0x2d => Ok(Op::Decr(Register::L)),
+      0x3d => Ok(Op::Decr(Register::A)),
+      0x40 => Ok(Op::Mov(Register::B, Register::B)),
+      0x41 => Ok(Op::Mov(Register::B, Register::C)),
+      0x42 => Ok(Op::Mov(Register::B, Register::D)),
+      0x43 => Ok(Op::Mov(Register::B, Register::E)),
+      0x44 => Ok(Op::Mov(Register::B, Register::H)),
+      0x45 => Ok(Op::Mov(Register::B, Register::L)),
+      0x47 => Ok(Op::Mov(Register::B, Register::A)),
+      0x48 => Ok(Op::Mov(Register::C, Register::B)),
+      0x49 => Ok(Op::Mov(Register::C, Register::C)),
+      0x4a => Ok(Op::Mov(Register::C, Register::D)),
+      0x4b => Ok(Op::Mov(Register::C, Register::E)),
+      0x4c => Ok(Op::Mov(Register::C, Register::H)),
+      0x4d => Ok(Op::Mov(Register::C, Register::L)),
+      0x4f => Ok(Op::Mov(Register::C, Register::A)),
+      0x50 => Ok(Op::Mov(Register::D, Register::B)),
+      0x51 => Ok(Op::Mov(Register::D, Register::C)),
+      0x52 => Ok(Op::Mov(Register::D, Register::D)),
+      0x53 => Ok(Op::Mov(Register::D, Register::E)),
+      0x54 => Ok(Op::Mov(Register::D, Register::H)),
+      0x55 => Ok(Op::Mov(Register::D, Register::L)),
+      0x57 => Ok(Op::Mov(Register::D, Register::A)),
+      0x58 => Ok(Op::Mov(Register::E, Register::B)),
+      0x59 => Ok(Op::Mov(Register::E, Register::C)),
+      0x5a => Ok(Op::Mov(Register::E, Register::D)),
+      0x5b => Ok(Op::Mov(Register::E, Register::E)),
+      0x5c => Ok(Op::Mov(Register::E, Register::H)),
+      0x5d => Ok(Op::Mov(Register::E, Register::L)),
+      0x5f => Ok(Op::Mov(Register::E, Register::A)),
+      0x60 => Ok(Op::Mov(Register::H, Register::B)),
+      0x61 => Ok(Op::Mov(Register::H, Register::C)),
+      0x62 => Ok(Op::Mov(Register::H, Register::D)),
+      0x63 => Ok(Op::Mov(Register::H, Register::E)),
+      0x64 => Ok(Op::Mov(Register::H, Register::H)),
+      0x65 => Ok(Op::Mov(Register::H, Register::L)),
+      0x67 => Ok(Op::Mov(Register::H, Register::A)),
+      0x68 => Ok(Op::Mov(Register::L, Register::B)),
+      0x69 => Ok(Op::Mov(Register::L, Register::C)),
+      0x6a => Ok(Op::Mov(Register::L, Register::D)),
+      0x6b => Ok(Op::Mov(Register::L, Register::E)),
+      0x6c => Ok(Op::Mov(Register::L, Register::H)),
+      0x6f => Ok(Op::Mov(Register::L, Register::A)),
+      0x78 => Ok(Op::Mov(Register::A, Register::B)),
+      0x79 => Ok(Op::Mov(Register::A, Register::C)),
+      0x7a => Ok(Op::Mov(Register::A, Register::D)),
+      0x7b => Ok(Op::Mov(Register::A, Register::E)),
+      0x7c => Ok(Op::Mov(Register::A, Register::H)),
+      0x7d => Ok(Op::Mov(Register::A, Register::L)),
+      _ => Err(byte)
+    }
+  }
+
+  fn execute_op(&mut self, op_code: Op) {
+    op_code.print();
+    match &op_code {
+      Op::Incr(reg) => {
+        let val = self.state.get_register(&reg);
+        let (answer, overflowed) = val.overflowing_add(1);
+        self.set_flags(answer);
+        self.state.set_register(&reg, answer);
+        self.state.flags.cy = if overflowed {
+          1
+        } else {
+          0
+        };
+      }
+      Op::Decr(reg) => {
+        let val = self.state.get_register(&reg);
+        let (answer, overflowed) = val.overflowing_sub(1);
+        self.set_flags(answer);
+        self.state.set_register(&reg, answer);
+        self.state.flags.cy = if overflowed {
+          1
+        } else {
+          0
+        };
+      }
+      Op::Mov(dest, source) => {
+        self.state.set_register(dest, self.state.get_register(source))
+      }
+      _ => {
+        panic!("Unhandled op");
+      }
+    };
+    self.state.pc += &op_code.get_size();
+  }
+
   pub fn run(&mut self) {
     let mut n = 0;
     while self.state.pc < self.program_size {
       n += 1;
+      let op_code = self.read_next_op();
+      match op_code {
+        Ok(op) => {
+          self.execute_op(op);
+          print_debug_info(&self.state, n);
+          continue
+        },
+        Err(_) => println!("Unhandled op falling back")
+      };
       let op = self.get_current_op();
       match op {
         0x00 => {
@@ -88,17 +267,6 @@ impl Emulator {
           let [c, b] = answer.to_le_bytes();
           self.state.b = b;
           self.state.c = c;
-        }
-        0x04 => {
-          println!("INCR B");
-          let (answer, overflowed) = self.state.b.overflowing_add(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.b = answer;
         }
         0x05 => {
           println!("B {:x}", self.state.b);
@@ -141,18 +309,6 @@ impl Emulator {
           let [c, b] = (self.get_bc() - 1).to_le_bytes();
           self.state.b = b;
           self.state.c = c;
-        }
-        0x0c => {
-          println!("INR C");
-          let (answer, overflowed) = self.state.c.overflowing_add(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-  
-          self.state.c = answer as u8;
         }
         0x0d => {
           println!("DCR C");
@@ -197,28 +353,6 @@ impl Emulator {
           self.state.d = d;
           self.state.e = e;
         }
-        0x14 => {
-          println!("INR D");
-          let (answer, overflowed) = self.state.d.overflowing_add(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.d = answer;
-        }
-        0x15 => {
-          println!("DECR D");
-          let (answer, overflowed) = self.state.d.overflowing_sub(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.d = answer;
-        }
         0x16 => {
           println!("MVI D D8");
           self.state.d = self.state.memory[self.state.pc];
@@ -250,28 +384,6 @@ impl Emulator {
           self.state.d = d;
           self.state.e = e;
         }
-        0x1c => {
-          println!("INR E");
-          let (answer, overflowed) = self.state.e.overflowing_add(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.e = answer;
-        }
-        0x1d => {
-          println!("DECR E");
-          let (answer, overflowed) = self.state.e.overflowing_sub(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.e = answer;
-        }
         0x1e => {
           println!("MVI E,D8");
           self.state.e = self.state.memory[self.state.pc];
@@ -300,28 +412,6 @@ impl Emulator {
           let [l, h] = (self.get_hl() + 1).to_le_bytes();
           self.state.h = h;
           self.state.l = l;
-        }
-        0x24 => {
-          println!("INR H");
-          let (answer, overflowed) = self.state.h.overflowing_add(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.h = answer;
-        }
-        0x25 => {
-          println!("DECR H");
-          let (answer, overflowed) = self.state.h.overflowing_sub(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.h = answer;
         }
         0x26 => {
           println!("MVI H,D8 {:x}", self.state.memory[self.state.pc]);
@@ -352,28 +442,6 @@ impl Emulator {
           let [l, h] = (self.get_hl() - 1).to_le_bytes();
           self.state.h = h;
           self.state.l = l;
-        }
-        0x2c => {
-          println!("INR L");
-          let (answer, overflowed) = self.state.l.overflowing_add(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.l = answer;
-        }
-        0x2d => {
-          println!("DECR L");
-          let (answer, overflowed) = self.state.l.overflowing_sub(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.l = answer;
         }
         0x2e => {
           println!("MVI L, D8");
@@ -436,28 +504,6 @@ impl Emulator {
           self.state.a = self.state.memory[self.state.pc];
           self.state.pc += 1;
         }
-        0x3c => {
-          println!("INCR A");
-          let (answer, overflowed) = self.state.a.overflowing_add(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x3d => {
-          println!("DECR A");
-          let (answer, overflowed) = self.state.a.overflowing_sub(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
         0x3f => {
           println!("CMC");
           self.state.flags.cy = if self.state.flags.cy == 1 {
@@ -466,169 +512,25 @@ impl Emulator {
             1
           }
         }
-        0x41 => {
-          println!("MOV B,C");
-          self.state.b = self.state.c;
-        }
-        0x42 => {
-          println!("MOV B,D");
-          self.state.b = self.state.d;
-        }
-        0x43 => {
-          println!("MOV B,E");
-          self.state.b = self.state.e;
-        }
-        0x44 => {
-          println!("MOV B,H");
-          self.state.b = self.state.h;
-        }
-        0x45 => {
-          println!("MOV B,L");
-          self.state.b = self.state.l;
-        }
         0x46 => {
           println!("MOV B, M");
           self.state.b = self.get_memory_at_hl();
-        }
-        0x47 => {
-          println!("MOV B, A");
-          self.state.b = self.state.a;
-        }
-        0x48 => {
-          println!("MOV C, B");
-          self.state.c = self.state.b;
-        }
-        0x4a => {
-          println!("MOV C,D");
-          self.state.c = self.state.d;
-        }
-        0x4b => {
-          println!("MOV C,E");
-          self.state.c = self.state.e;
-        }
-        0x4c => {
-          println!("MOV C,H");
-          self.state.c = self.state.h;
-        }
-        0x4f => {
-          println!("MOV C, A");
-          self.state.c = self.state.a;
-        }
-        0x4d => {
-          println!("MOV C,L");
-          self.state.c = self.state.l;
-        }
-        0x50 => {
-          println!("MOV D,B");
-          self.state.d = self.state.b;
-        }
-        0x51 => {
-          println!("MOV D, C");
-          self.state.d = self.state.c;
-        }
-        0x53 => {
-          println!("MOV D,E");
-          self.state.d = self.state.e;
-        }
-        0x54 => {
-          println!("MOV D,H");
-          self.state.d = self.state.h;
-        }
-        0x55 => {
-          println!("MOV D,L");
-          self.state.d = self.state.l;
         }
         0x56 => {
           println!("MOV D,M");
           self.state.d = self.get_memory_at_hl();
         }
-        0x57 => {
-          println!("MOV D,A");
-          self.state.d = self.state.a;
-        }
-        0x58 => {
-          println!("MOV E,B");
-          self.state.e = self.state.b;
-        }
-        0x59 => {
-          println!("MOV C, E");
-          self.state.e = self.state.c;
-        }
-        0x5a => {
-          println!("MOV E, D");
-          self.state.e = self.state.d;
-        }
-        0x5c => {
-          println!("MOV E,H");
-          self.state.e = self.state.h;
-        }
-        0x5d => {
-          println!("MOV E,L");
-          self.state.e = self.state.l;
-        }
         0x5e => {
           println!("MOV E,M");
           self.state.e = self.get_memory_at_hl();
         }
-        0x5f => {
-          println!("MOV E,A");
-          self.state.e = self.state.a;
-        }
-        0x60 => {
-          println!("MOV H,B");
-          self.state.h = self.state.b;
-        }
-        0x61 => {
-          println!("MOV H,C");
-          self.state.h = self.state.c;
-        }
-        0x62 => {
-          println!("MOV H,D");
-          self.state.h = self.state.d;
-        }
-        0x63 => {
-          println!("MOV H, E");
-          self.state.h = self.state.e;
-        }
-        0x65 => {
-          println!("MOV H,L");
-          self.state.h = self.state.l;
-        }	
         0x66 => {
           println!("MOV H,M");
           self.state.h = self.get_memory_at_hl();
         }
-        0x67 => {
-          println!("MOV H,A");
-          self.state.h = self.state.a;
-        }
-        0x68 => {
-          println!("MOV L,B");
-          self.state.l = self.state.b;
-        }
-        0x69 => {
-          println!("MOV L,C");
-          self.state.l = self.state.c;
-        }
-        0x6a => {
-          println!("MOV L,D");
-          self.state.l = self.state.d;
-        }
-        0x6b => {
-          println!("MOV L,E");
-          self.state.l = self.state.e;
-        }
-        0x6c => {
-          println!("MOV L,H");
-          self.state.l = self.state.h;
-        }
         0x6e => {
           println!("MOV L, M");
           self.state.l = self.get_memory_at_hl();
-        }
-        0x6f => {
-          println!("MOV L,A");
-          self.state.l = self.state.a;
         }
         0x70 => {
           println!("MOV M, B");
@@ -653,30 +555,6 @@ impl Emulator {
         0x77 => {
           println!("MOV M,A");
           self.state.memory[self.get_hl() as usize] = self.state.a;
-        }
-        0x78 => {
-          println!("MOV A,B");
-          self.state.a = self.state.b;
-        }
-        0x79 => {
-          println!("MOV A,C");
-          self.state.a = self.state.c;
-        }
-        0x7a => {
-          println!("MOV A,D");
-          self.state.a = self.state.d;
-        }
-        0x7b => {
-          println!("MOV A,E");
-          self.state.a = self.state.e;
-        }
-        0x7c => {
-          println!("MOV H,A");
-          self.state.a = self.state.h;
-        }
-        0x7d => {
-          println!("MOV A, L");
-          self.state.a = self.state.l;
         }
         0x7e => {
           println!("MOV A,M");
