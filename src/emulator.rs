@@ -28,19 +28,28 @@ enum Op {
   Nop,
   Incr(Register),
   Decr(Register),
+  Add(Register),
+  Sub(Register),
   Mov(Register, Register)
 }
 
 impl Op {
   fn get_size(&self) -> usize {
     match self {
-      Op::Incr(_) | Op::Nop | Op::Decr(_) | Op::Mov(_,_) => 1,
+      Op::Incr(_) 
+      | Op::Nop 
+      | Op::Decr(_) 
+      | Op::Mov(_,_) 
+      | Op::Add(_)
+      | Op::Sub(_) => 1,
     }
   }
   fn print(&self) {
     match self {
       Op::Incr(reg) => println!("INCR {}", reg.to_string()),
       Op::Decr(reg) => println!("DECR {}", reg.to_string()),
+      Op::Add(reg) => println!("ADD {}", reg.to_string()),
+      Op::Sub(reg) => println!("SUB {}", reg.to_string()),
       Op::Mov(dest, source) => println!("MOV {},{}", dest.to_string(), source.to_string()),
       Op::Nop => println!("NOP")
     }
@@ -135,6 +144,7 @@ impl Emulator {
   fn read_next_op(&self) -> Result<Op, u8> {
     let byte = self.state.memory[self.state.pc];
     match byte {
+      // Increment Ops
       0x04 => Ok(Op::Incr(Register::B)),
       0x3c => Ok(Op::Incr(Register::A)),
       0x0c => Ok(Op::Incr(Register::C)),
@@ -142,11 +152,30 @@ impl Emulator {
       0x1c => Ok(Op::Incr(Register::E)),
       0x24 => Ok(Op::Incr(Register::H)),
       0x2c => Ok(Op::Incr(Register::L)),
+      // Decrement Ops
       0x15 => Ok(Op::Decr(Register::D)),
       0x1d => Ok(Op::Decr(Register::E)),
       0x25 => Ok(Op::Decr(Register::H)),
       0x2d => Ok(Op::Decr(Register::L)),
       0x3d => Ok(Op::Decr(Register::A)),
+      0x0d => Ok(Op::Decr(Register::C)),
+      0x05 => Ok(Op::Decr(Register::B)),
+      // Add Ops
+      0x80 => Ok(Op::Add(Register::B)),
+      0x81 => Ok(Op::Add(Register::C)),
+      0x82 => Ok(Op::Add(Register::D)),
+      0x83 => Ok(Op::Add(Register::E)),
+      0x84 => Ok(Op::Add(Register::H)),
+      0x85 => Ok(Op::Add(Register::L)),
+      0x87 => Ok(Op::Add(Register::A)),
+      // Sub Ops
+      0x90 => Ok(Op::Sub(Register::B)),
+      0x91 => Ok(Op::Sub(Register::C)),
+      0x92 => Ok(Op::Sub(Register::D)),
+      0x93 => Ok(Op::Sub(Register::E)),
+      0x94 => Ok(Op::Sub(Register::H)),
+      0x95 => Ok(Op::Sub(Register::L)),
+      // Mov Ops
       0x40 => Ok(Op::Mov(Register::B, Register::B)),
       0x41 => Ok(Op::Mov(Register::B, Register::C)),
       0x42 => Ok(Op::Mov(Register::B, Register::D)),
@@ -201,6 +230,7 @@ impl Emulator {
   fn execute_op(&mut self, op_code: Op) {
     op_code.print();
     match &op_code {
+      Op::Nop => {}
       Op::Incr(reg) => {
         let val = self.state.get_register(&reg);
         let (answer, overflowed) = val.overflowing_add(1);
@@ -223,11 +253,28 @@ impl Emulator {
           0
         };
       }
+      Op::Add(reg) => {
+        let (answer, overflowed) = self.state.a.overflowing_add(self.state.get_register(reg));
+        self.set_flags(answer);
+        self.state.flags.cy = if overflowed {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer;
+      }
+      Op::Sub(reg) => {
+        let (answer, overflowed) = self.state.a.overflowing_sub(self.state.get_register(reg));
+        self.set_flags(answer);
+        self.state.flags.cy = if overflowed {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer;
+      }
       Op::Mov(dest, source) => {
         self.state.set_register(dest, self.state.get_register(source))
-      }
-      _ => {
-        panic!("Unhandled op");
       }
     };
     self.state.pc += &op_code.get_size();
@@ -268,13 +315,6 @@ impl Emulator {
           self.state.b = b;
           self.state.c = c;
         }
-        0x05 => {
-          println!("B {:x}", self.state.b);
-          let mut b = self.state.b;
-          b = b.wrapping_sub(1);
-          self.state.b = b;
-          self.set_flags(b);
-        }
         0x06 => {
           println!("MVI B {:x}", self.state.memory[self.state.pc]);
           self.state.b = self.state.memory[self.state.pc];
@@ -309,18 +349,6 @@ impl Emulator {
           let [c, b] = (self.get_bc() - 1).to_le_bytes();
           self.state.b = b;
           self.state.c = c;
-        }
-        0x0d => {
-          println!("DCR C");
-          let (answer, overflowed) = self.state.c.overflowing_sub(1);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-  
-          self.state.c = answer as u8;
         }
         0x0e => {
           println!("MVI, C,D8 {:x}", self.state.memory[self.state.pc]);
@@ -560,86 +588,9 @@ impl Emulator {
           println!("MOV A,M");
           self.state.a = self.get_memory_at_hl();
         }
-        0x80 => {
-          println!("ADD B");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.b);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x81 => {
-          println!("ADD C");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.c);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x82 => {
-          println!("ADD D");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.d);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x83 => {
-          println!("ADD E");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.e);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x84 => {
-          println!("ADD H");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.h);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x85 => {
-          println!("ADD L");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.l);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
         0x86 => {
           println!("ADD M");
           let (answer, overflowed) = self.state.a.overflowing_add(self.get_memory_at_hl());
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x87 => {
-          println!("ADD A");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.a);
           self.set_flags(answer);
           self.state.flags.cy = if overflowed {
             1
@@ -743,72 +694,6 @@ impl Emulator {
             0
           };
           self.state.a = answer2;
-        }
-        0x90 => {
-          println!("SUB B");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.b);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x91 => {
-          println!("SUB B");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.c);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x92 => {
-          println!("SUB D");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.d);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x93 => {
-          println!("SUB E");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.e);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x94 => {
-          println!("SUB H");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.h);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
-        0x95 => {
-          println!("SUB L");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.l);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
         }
         0x96 => {
           println!("SUB M");
@@ -1764,43 +1649,6 @@ impl Emulator {
     println!("{:x} op", op);
     self.state.pc += 1;
     op
-  }
-
-
-  fn print_debug_info(state: &State, n: i32) {
-    print!("\x1B[2J\x1B[1;1H");
-    println!("n {}", n);
-    println!("{0: <2} | {1: <2} | {2: <2} | {3: <2} | {4: <2} | {5: <2} | {6: <2} | {7: <4} | {8: <4} | {9: <5}",
-              "a", "b", "c", "d", "e", "h", "l", "pc", "sp", "flags");
-    print!("{:02x} | {:02x} | {:02x} | {:02x} | {:02x} | {:02x} | {:02x} | {:04x} | {:04x} | {}",
-              state.a, state.b, state.c, state.d, state.e, state.h, state.l, state.pc, state.sp, "");
-    
-    if state.flags.z == 1 {
-      print!("z");
-    } else {
-      print!(".");
-    }
-
-    if state.flags.s == 1 {
-      print!("s");
-    } else {
-      print!(".");
-    }
-
-    if state.flags.p == 1 {
-      print!("p");
-    } else {
-      print!(".");
-    }
-
-
-    if state.flags.cy == 1 {
-      print!("c");
-    } else {
-      print!(".");
-    }
-
-    println!();
   }
 }
 
