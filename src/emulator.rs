@@ -30,6 +30,9 @@ enum Op {
   Decr(Register),
   Add(Register),
   Sub(Register),
+  Ana(Register),
+  Xra(Register),
+  Ora(Register),
   Mov(Register, Register)
 }
 
@@ -41,7 +44,10 @@ impl Op {
       | Op::Decr(_) 
       | Op::Mov(_,_) 
       | Op::Add(_)
-      | Op::Sub(_) => 1,
+      | Op::Sub(_)
+      | Op::Ana(_)
+      | Op::Xra(_)
+      | Op::Ora(_) => 1,
     }
   }
   fn print(&self) {
@@ -50,6 +56,9 @@ impl Op {
       Op::Decr(reg) => println!("DECR {}", reg.to_string()),
       Op::Add(reg) => println!("ADD {}", reg.to_string()),
       Op::Sub(reg) => println!("SUB {}", reg.to_string()),
+      Op::Ana(reg) => println!("ANA {}", reg.to_string()),
+      Op::Xra(reg) => println!("XRA {}", reg.to_string()),
+      Op::Ora(reg) => println!("ORA {}", reg.to_string()),
       Op::Mov(dest, source) => println!("MOV {},{}", dest.to_string(), source.to_string()),
       Op::Nop => println!("NOP")
     }
@@ -175,6 +184,31 @@ impl Emulator {
       0x93 => Ok(Op::Sub(Register::E)),
       0x94 => Ok(Op::Sub(Register::H)),
       0x95 => Ok(Op::Sub(Register::L)),
+      0x97 => Ok(Op::Sub(Register::A)),
+      // Bitwise & Ops
+      0xa0 => Ok(Op::Ana(Register::B)),
+      0xa1 => Ok(Op::Ana(Register::C)),
+      0xa2 => Ok(Op::Ana(Register::D)),
+      0xa3 => Ok(Op::Ana(Register::E)),
+      0xa4 => Ok(Op::Ana(Register::H)),
+      0xa5 => Ok(Op::Ana(Register::L)),
+      0xa7 => Ok(Op::Ana(Register::A)),
+      // Bitwise XOR Ops
+      0xa8 => Ok(Op::Xra(Register::B)),
+      0xa9 => Ok(Op::Xra(Register::C)),
+      0xaa => Ok(Op::Xra(Register::D)),
+      0xab => Ok(Op::Xra(Register::E)),
+      0xac => Ok(Op::Xra(Register::H)),
+      0xad => Ok(Op::Xra(Register::L)),
+      0xaf => Ok(Op::Xra(Register::A)),
+      // Bitwise OR Ops
+      0xb0 => Ok(Op::Ora(Register::B)),
+      0xb1 => Ok(Op::Ora(Register::C)),
+      0xb2 => Ok(Op::Ora(Register::D)),
+      0xb3 => Ok(Op::Ora(Register::E)),
+      0xb4 => Ok(Op::Ora(Register::H)),
+      0xb5 => Ok(Op::Ora(Register::L)),
+      0xb7 => Ok(Op::Ora(Register::A)),
       // Mov Ops
       0x40 => Ok(Op::Mov(Register::B, Register::B)),
       0x41 => Ok(Op::Mov(Register::B, Register::C)),
@@ -267,6 +301,36 @@ impl Emulator {
         let (answer, overflowed) = self.state.a.overflowing_sub(self.state.get_register(reg));
         self.set_flags(answer);
         self.state.flags.cy = if overflowed {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer;
+      }
+      Op::Ana(reg) => {
+        let answer = self.state.a & self.state.get_register(reg);
+        self.set_flags(answer);
+        self.state.flags.cy = if self.state.a < answer {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer;
+      }
+      Op::Xra(reg) => {
+        let answer = self.state.a ^ self.state.get_register(reg);
+        self.set_flags(answer);
+        self.state.flags.cy = if self.state.a < answer {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer;
+      }
+      Op::Ora(reg) => {
+        let answer = self.state.a | self.state.get_register(reg);
+        self.set_flags(answer);
+        self.state.flags.cy = if self.state.a < answer {
           1
         } else {
           0
@@ -706,17 +770,6 @@ impl Emulator {
           };
           self.state.a = answer;
         }
-        0x97 => {
-          println!("SUB A");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.a);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
         0x98 => {
           println!("SBB B");
           let (answer, overflowed) = self.state.a.overflowing_sub(self.state.b);
@@ -813,143 +866,9 @@ impl Emulator {
           };
           self.state.a = answer2;
         }
-        0xa1 => {
-          println!("ANA C");
-          let answer = self.state.a & self.state.c;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xa2 => {
-          println!("ANA D");
-          let answer = self.state.a & self.state.d;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xa3 => {
-          println!("ANA e");
-          let answer = self.state.a & self.state.e;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xa4 => {
-          println!("ANA h");
-          let answer = self.state.a & self.state.h;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xa5 => {
-          println!("ANA L");
-          let l = self.state.l;
-          let answer = self.state.a & l;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
         0xa6 => {
           println!("ANA M");
           let answer = self.state.a & self.get_memory_at_hl();
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xa7 => {
-          println!("ANA A");
-          let a = self.state.a;
-          let answer = self.state.a & a;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xa8 => {
-          println!("XRA B");
-          let answer = self.state.a ^ self.state.b;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xa9 => {
-          println!("XRA C");
-          let answer = self.state.a ^ self.state.c;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xaa => {
-          println!("XRA d");
-          let answer = self.state.a ^ self.state.d;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xab => {
-          println!("XRA e");
-          let answer = self.state.a ^ self.state.e;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xac => {
-          println!("XRA h");
-          let answer = self.state.a ^ self.state.h;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xad => {
-          println!("XRA l");
-          let answer = self.state.a ^ self.state.l;
           self.set_flags(answer);
           self.state.flags.cy = if self.state.a < (answer as u8) {
             1
@@ -969,98 +888,9 @@ impl Emulator {
           };
           self.state.a = answer as u8;
         }
-        0xaf => {
-          println!("XRA A");
-          let a = self.state.a;
-          let answer = self.state.a ^ a;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xb0 => {
-          println!("ORA B");
-          let answer = self.state.a | self.state.b;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xb1 => {
-          println!("ORA c");
-          let answer = self.state.a | self.state.c;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xb2 => {
-          println!("ORA D");
-          let answer = self.state.a | self.state.d;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xb3 => {
-          println!("ORA E");
-          let answer = self.state.a | self.state.e;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xb4 => {
-          println!("ORA h");
-          let answer = self.state.a | self.state.h;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xb5 => {
-          println!("ORA l");
-          let answer = self.state.a | self.state.l;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
         0xb6 => {
           println!("ORA M");
           let answer = self.state.a | self.get_memory_at_hl();
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xb7 => {
-          println!("ORA A");
-          let answer = self.state.a;
           self.set_flags(answer);
           self.state.flags.cy = if self.state.a < (answer as u8) {
             1
