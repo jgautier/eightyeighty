@@ -7,7 +7,8 @@ enum Register {
   D,
   E,
   H,
-  L
+  L,
+  HL
 }
 
 impl Register {
@@ -19,7 +20,8 @@ impl Register {
       Register::D => "D",
       Register::E => "E",
       Register::H => "H",
-      Register::L => "L"
+      Register::L => "L",
+      Register::HL => "HL"
     }
   }
 }
@@ -97,7 +99,10 @@ impl State {
       Register::D => self.d = value,
       Register::E => self.e = value,
       Register::H => self.h = value,
-      Register::L => self.l = value
+      Register::L => self.l = value,
+      Register::HL => {
+        self.memory[u16::from_le_bytes([self.l, self.h]) as usize] = value
+      }
     }
   }
   fn get_register(&self, reg: &Register) -> u8 {
@@ -108,7 +113,10 @@ impl State {
       Register::D => self.d,
       Register::E => self.e,
       Register::H => self.h,
-      Register::L => self.l
+      Register::L => self.l,
+      Register::HL => {
+        self.memory[u16::from_le_bytes([self.l, self.h]) as usize]
+      }
     }
   }
 }
@@ -257,6 +265,20 @@ impl Emulator {
       0x7b => Ok(Op::Mov(Register::A, Register::E)),
       0x7c => Ok(Op::Mov(Register::A, Register::H)),
       0x7d => Ok(Op::Mov(Register::A, Register::L)),
+      0x46 => Ok(Op::Mov(Register::B, Register::HL)),
+      0x4e => Ok(Op::Mov(Register::C, Register::HL)),
+      0x56 => Ok(Op::Mov(Register::D, Register::HL)),
+      0x5e => Ok(Op::Mov(Register::E, Register::HL)),
+      0x66 => Ok(Op::Mov(Register::H, Register::HL)),
+      0x6e => Ok(Op::Mov(Register::L, Register::HL)),
+      0x70 => Ok(Op::Mov(Register::HL, Register::B)),
+      0x71 => Ok(Op::Mov(Register::HL, Register::C)),
+      0x72 => Ok(Op::Mov(Register::HL, Register::D)),
+      0x73 => Ok(Op::Mov(Register::HL, Register::E)),
+      0x74 => Ok(Op::Mov(Register::HL, Register::H)),
+      0x75 => Ok(Op::Mov(Register::HL, Register::L)),
+      0x77 => Ok(Op::Mov(Register::HL, Register::A)),
+      0x7e => Ok(Op::Mov(Register::A, Register::HL)),
       _ => Err(byte)
     }
   }
@@ -603,54 +625,6 @@ impl Emulator {
           } else {
             1
           }
-        }
-        0x46 => {
-          println!("MOV B, M");
-          self.state.b = self.get_memory_at_hl();
-        }
-        0x56 => {
-          println!("MOV D,M");
-          self.state.d = self.get_memory_at_hl();
-        }
-        0x5e => {
-          println!("MOV E,M");
-          self.state.e = self.get_memory_at_hl();
-        }
-        0x66 => {
-          println!("MOV H,M");
-          self.state.h = self.get_memory_at_hl();
-        }
-        0x6e => {
-          println!("MOV L, M");
-          self.state.l = self.get_memory_at_hl();
-        }
-        0x70 => {
-          println!("MOV M, B");
-          self.state.memory[self.get_hl() as usize] = self.state.b;
-        }
-        0x72 => {
-          println!("MOV M, d");
-          self.state.memory[self.get_hl() as usize] = self.state.d;
-        }
-        0x73 => {
-          println!("MOV M, e");
-          self.state.memory[self.get_hl() as usize] = self.state.e;
-        }
-        0x74 => {
-          println!("MOV M, h");
-          self.state.memory[self.get_hl() as usize] = self.state.h;
-        }
-        0x75 => {
-          println!("MOV M, l");
-          self.state.memory[self.get_hl() as usize] = self.state.l;
-        }
-        0x77 => {
-          println!("MOV M,A");
-          self.state.memory[self.get_hl() as usize] = self.state.a;
-        }
-        0x7e => {
-          println!("MOV A,M");
-          self.state.a = self.get_memory_at_hl();
         }
         0x86 => {
           println!("ADD M");
