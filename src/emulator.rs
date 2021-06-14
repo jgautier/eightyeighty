@@ -198,7 +198,7 @@ impl Emulator {
       0x93 => Ok(Op::Sub(Register::E)),
       0x94 => Ok(Op::Sub(Register::H)),
       0x95 => Ok(Op::Sub(Register::L)),
-      0x96 => Ok(OP::Sub((Register::Hl)),
+      0x96 => Ok(Op::Sub(Register::Hl)),
       0x97 => Ok(Op::Sub(Register::A)),
       // Bitwise & Ops
       0xa0 => Ok(Op::Ana(Register::B)),
@@ -207,7 +207,7 @@ impl Emulator {
       0xa3 => Ok(Op::Ana(Register::E)),
       0xa4 => Ok(Op::Ana(Register::H)),
       0xa5 => Ok(Op::Ana(Register::L)),
-      0xa6 => Ok(Op::Ana(Register::HL)),
+      0xa6 => Ok(Op::Ana(Register::Hl)),
       0xa7 => Ok(Op::Ana(Register::A)),
       // Bitwise XOR Ops
       0xa8 => Ok(Op::Xra(Register::B)),
