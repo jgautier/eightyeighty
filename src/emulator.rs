@@ -35,7 +35,8 @@ enum Op {
   Ana(Register),
   Xra(Register),
   Ora(Register),
-  Mov(Register, Register)
+  Mov(Register, Register),
+  Cmp(Register)
 }
 
 impl Op {
@@ -49,7 +50,8 @@ impl Op {
       | Op::Sub(_)
       | Op::Ana(_)
       | Op::Xra(_)
-      | Op::Ora(_) => 1,
+      | Op::Ora(_)
+      | Op::Cmp(_) => 1,
     }
   }
   fn print(&self) {
@@ -62,6 +64,7 @@ impl Op {
       Op::Xra(reg) => println!("XRA {}", reg.to_string()),
       Op::Ora(reg) => println!("ORA {}", reg.to_string()),
       Op::Mov(dest, source) => println!("MOV {},{}", dest.to_string(), source.to_string()),
+      Op::Cmp(reg) => println!("CMP {}", reg.to_string()),
       Op::Nop => println!("NOP")
     }
   }
@@ -217,6 +220,15 @@ impl Emulator {
       0xb4 => Ok(Op::Ora(Register::H)),
       0xb5 => Ok(Op::Ora(Register::L)),
       0xb7 => Ok(Op::Ora(Register::A)),
+      // CMP Ops
+      0xb8 => Ok(Op::Cmp(Register::B)),
+      0xb9 => Ok(Op::Cmp(Register::C)),
+      0xba => Ok(Op::Cmp(Register::D)),
+      0xbb => Ok(Op::Cmp(Register::E)),
+      0xbc => Ok(Op::Cmp(Register::H)),
+      0xbd => Ok(Op::Cmp(Register::L)),
+      0xbe => Ok(Op::Cmp(Register::Hl)),
+      0xbf => Ok(Op::Cmp(Register::A)),
       // Mov Ops
       0x40 => Ok(Op::Mov(Register::B, Register::B)),
       0x41 => Ok(Op::Mov(Register::B, Register::C)),
@@ -358,6 +370,15 @@ impl Emulator {
           0
         };
         self.state.a = answer;
+      }
+      Op::Cmp(reg) => {
+        let (answer, overflowed) = self.state.a.overflowing_sub(self.state.get_register(reg));
+        self.set_flags(answer);
+        self.state.flags.cy = if overflowed {
+          1
+        } else {
+          0
+        };
       }
       Op::Mov(dest, source) => {
         self.state.set_register(dest, self.state.get_register(source))
@@ -872,86 +893,6 @@ impl Emulator {
             0
           };
           self.state.a = answer as u8;
-        }
-        0xb8 => {
-          println!("CMP B");
-          let answer = self.state.a - self.state.b;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-        }
-        0xb9 => {
-          println!("CMP C");
-          let answer = self.state.a - self.state.c;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-        }
-        0xba => {
-          println!("CMP d");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.d);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-        }
-        0xbb => {
-          println!("CMP e");
-          let answer = self.state.a - self.state.e;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-        }
-        0xbc => {
-          println!("CMP h");
-          let answer = self.state.a - self.state.h;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-        }
-        0xbd => {
-          println!("CMP l");
-          let answer = self.state.a - self.state.l;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-        }
-        0xbe => {
-          println!("CMP e");
-          let answer = self.state.a - self.get_memory_at_hl();
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-        }
-        0xbf => {
-          println!("CMP a");
-          let answer = 0;
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
         }
         0xc0 => {
           println!("{:04x}", self.state.pc);
