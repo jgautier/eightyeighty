@@ -1,5 +1,3 @@
-use std::thread;
-
 enum Register {
   A,
   B,
@@ -36,7 +34,9 @@ enum Op {
   Xra(Register),
   Ora(Register),
   Mov(Register, Register),
-  Cmp(Register)
+  Cmp(Register),
+  Adc(Register),
+  Sbb(Register),
 }
 
 impl Op {
@@ -51,7 +51,9 @@ impl Op {
       | Op::Ana(_)
       | Op::Xra(_)
       | Op::Ora(_)
-      | Op::Cmp(_) => 1,
+      | Op::Cmp(_)
+      | Op::Adc(_)
+      | Op::Sbb(_) => 1,
     }
   }
   fn print(&self) {
@@ -65,6 +67,8 @@ impl Op {
       Op::Ora(reg) => println!("ORA {}", reg.to_string()),
       Op::Mov(dest, source) => println!("MOV {},{}", dest.to_string(), source.to_string()),
       Op::Cmp(reg) => println!("CMP {}", reg.to_string()),
+      Op::Adc(reg) => println!("ADC {}", reg.to_string()),
+      Op::Sbb(reg) => println!("SBB {}", reg.to_string()),
       Op::Nop => println!("NOP")
     }
   }
@@ -227,7 +231,7 @@ impl Emulator {
       0xb5 => Ok(Op::Ora(Register::L)),
       0xb6 => Ok(Op::Ora(Register::Hl)),
       0xb7 => Ok(Op::Ora(Register::A)),
-      // CMP Ops
+      // Cmp Ops
       0xb8 => Ok(Op::Cmp(Register::B)),
       0xb9 => Ok(Op::Cmp(Register::C)),
       0xba => Ok(Op::Cmp(Register::D)),
@@ -236,6 +240,24 @@ impl Emulator {
       0xbd => Ok(Op::Cmp(Register::L)),
       0xbe => Ok(Op::Cmp(Register::Hl)),
       0xbf => Ok(Op::Cmp(Register::A)),
+      // Adc Ops
+      0x88 => Ok(Op::Adc(Register::B)),
+      0x89 => Ok(Op::Adc(Register::C)),
+      0x8a => Ok(Op::Adc(Register::D)),
+      0x8b => Ok(Op::Adc(Register::E)),
+      0x8c => Ok(Op::Adc(Register::H)),
+      0x8d => Ok(Op::Adc(Register::L)),
+      0x8e => Ok(Op::Adc(Register::Hl)),
+      0x8f => Ok(Op::Adc(Register::A)),
+      // Sbb Ops
+      0x98 => Ok(Op::Sbb(Register::B)),
+      0x99 => Ok(Op::Sbb(Register::C)),
+      0x9a => Ok(Op::Sbb(Register::D)),
+      0x9b => Ok(Op::Sbb(Register::E)),
+      0x9c => Ok(Op::Sbb(Register::H)),
+      0x9d => Ok(Op::Sbb(Register::L)),
+      0x9e => Ok(Op::Sbb(Register::Hl)),
+      0x9f => Ok(Op::Sbb(Register::A)),
       // Mov Ops
       0x40 => Ok(Op::Mov(Register::B, Register::B)),
       0x41 => Ok(Op::Mov(Register::B, Register::C)),
@@ -386,6 +408,28 @@ impl Emulator {
         } else {
           0
         };
+      }
+      Op::Adc(reg) => {
+        let (answer, overflowed) = self.state.a.overflowing_add(self.state.get_register(reg));
+        let (answer2, overflowed2) = answer.overflowing_add(self.state.flags.cy);
+        self.set_flags(answer2);
+        self.state.flags.cy = if overflowed || overflowed2 {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer2;
+      }
+      Op::Sbb(reg) => {
+        let (answer, overflowed) = self.state.a.overflowing_sub(self.state.get_register(reg));
+        let (answer2, overflowed2) = answer.overflowing_sub(self.state.flags.cy);
+        self.set_flags(answer2);
+        self.state.flags.cy = if overflowed || overflowed2 {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer2;
       }
       Op::Mov(dest, source) => {
         self.state.set_register(dest, self.state.get_register(source))
@@ -641,198 +685,6 @@ impl Emulator {
           } else {
             1
           }
-        }
-        0x88 => {
-          println!("ADC B");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.b);
-          let (answer2, overflowed2) = answer.overflowing_add(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x89 => {
-          println!("ADC c");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.c);
-          let (answer2, overflowed2) = answer.overflowing_add(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x8a => {
-          println!("ADC D");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.d);
-          let (answer2, overflowed2) = answer.overflowing_add(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x8b => {
-          println!("ADC e");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.e);
-          let (answer2, overflowed2) = answer.overflowing_add(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x8c => {
-          println!("ADC h");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.h);
-          let (answer2, overflowed2) = answer.overflowing_add(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x8d => {
-          println!("ADC L");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.l);
-          let (answer2, overflowed2) = answer.overflowing_add(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x8e => {
-          println!("ADC B");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.get_memory_at_hl());
-          let (answer2, overflowed2) = answer.overflowing_add(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x8f => {
-          println!("ADC A");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.a);
-          let (answer2, overflowed2) = answer.overflowing_add(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x98 => {
-          println!("SBB B");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.b);
-          let (answer2, overflowed2) = answer.overflowing_sub(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x99 => {
-          println!("SBB C");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.c);
-          let (answer2, overflowed2) = answer.overflowing_sub(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x9a => {
-          println!("SBB D");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.d);
-          let (answer2, overflowed2) = answer.overflowing_sub(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x9b => {
-          println!("SBB e");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.e);
-          let (answer2, overflowed2) = answer.overflowing_sub(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x9c => {
-          println!("SBB H");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.h);
-          let (answer2, overflowed2) = answer.overflowing_sub(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x9d => {
-          println!("SBB L");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.l);
-          let (answer2, overflowed2) = answer.overflowing_sub(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x9e => {
-          println!("SBB m");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.get_memory_at_hl());
-          let (answer2, overflowed2) = answer.overflowing_sub(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
-        }
-        0x9f => {
-          println!("SBB A");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.a);
-          let (answer2, overflowed2) = answer.overflowing_sub(self.state.flags.cy);
-          self.set_flags(answer2);
-          self.state.flags.cy = if overflowed || overflowed2 {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer2;
         }
         0xc0 => {
           println!("{:04x}", self.state.pc);
