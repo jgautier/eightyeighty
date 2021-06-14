@@ -8,7 +8,7 @@ enum Register {
   E,
   H,
   L,
-  HL
+  Hl
 }
 
 impl Register {
@@ -21,7 +21,7 @@ impl Register {
       Register::E => "E",
       Register::H => "H",
       Register::L => "L",
-      Register::HL => "HL"
+      Register::Hl => "HL"
     }
   }
 }
@@ -100,7 +100,7 @@ impl State {
       Register::E => self.e = value,
       Register::H => self.h = value,
       Register::L => self.l = value,
-      Register::HL => {
+      Register::Hl => {
         self.memory[u16::from_le_bytes([self.l, self.h]) as usize] = value
       }
     }
@@ -114,7 +114,7 @@ impl State {
       Register::E => self.e,
       Register::H => self.h,
       Register::L => self.l,
-      Register::HL => {
+      Register::Hl => {
         self.memory[u16::from_le_bytes([self.l, self.h]) as usize]
       }
     }
@@ -265,20 +265,20 @@ impl Emulator {
       0x7b => Ok(Op::Mov(Register::A, Register::E)),
       0x7c => Ok(Op::Mov(Register::A, Register::H)),
       0x7d => Ok(Op::Mov(Register::A, Register::L)),
-      0x46 => Ok(Op::Mov(Register::B, Register::HL)),
-      0x4e => Ok(Op::Mov(Register::C, Register::HL)),
-      0x56 => Ok(Op::Mov(Register::D, Register::HL)),
-      0x5e => Ok(Op::Mov(Register::E, Register::HL)),
-      0x66 => Ok(Op::Mov(Register::H, Register::HL)),
-      0x6e => Ok(Op::Mov(Register::L, Register::HL)),
-      0x70 => Ok(Op::Mov(Register::HL, Register::B)),
-      0x71 => Ok(Op::Mov(Register::HL, Register::C)),
-      0x72 => Ok(Op::Mov(Register::HL, Register::D)),
-      0x73 => Ok(Op::Mov(Register::HL, Register::E)),
-      0x74 => Ok(Op::Mov(Register::HL, Register::H)),
-      0x75 => Ok(Op::Mov(Register::HL, Register::L)),
-      0x77 => Ok(Op::Mov(Register::HL, Register::A)),
-      0x7e => Ok(Op::Mov(Register::A, Register::HL)),
+      0x46 => Ok(Op::Mov(Register::B, Register::Hl)),
+      0x4e => Ok(Op::Mov(Register::C, Register::Hl)),
+      0x56 => Ok(Op::Mov(Register::D, Register::Hl)),
+      0x5e => Ok(Op::Mov(Register::E, Register::Hl)),
+      0x66 => Ok(Op::Mov(Register::H, Register::Hl)),
+      0x6e => Ok(Op::Mov(Register::L, Register::Hl)),
+      0x70 => Ok(Op::Mov(Register::Hl, Register::B)),
+      0x71 => Ok(Op::Mov(Register::Hl, Register::C)),
+      0x72 => Ok(Op::Mov(Register::Hl, Register::D)),
+      0x73 => Ok(Op::Mov(Register::Hl, Register::E)),
+      0x74 => Ok(Op::Mov(Register::Hl, Register::H)),
+      0x75 => Ok(Op::Mov(Register::Hl, Register::L)),
+      0x77 => Ok(Op::Mov(Register::Hl, Register::A)),
+      0x7e => Ok(Op::Mov(Register::A, Register::Hl)),
       _ => Err(byte)
     }
   }
