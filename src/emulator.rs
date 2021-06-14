@@ -172,6 +172,7 @@ impl Emulator {
       0x1c => Ok(Op::Incr(Register::E)),
       0x24 => Ok(Op::Incr(Register::H)),
       0x2c => Ok(Op::Incr(Register::L)),
+      0x34 => Ok(Op::Incr(Register::Hl)),
       // Decrement Ops
       0x15 => Ok(Op::Decr(Register::D)),
       0x1d => Ok(Op::Decr(Register::E)),
@@ -180,6 +181,7 @@ impl Emulator {
       0x3d => Ok(Op::Decr(Register::A)),
       0x0d => Ok(Op::Decr(Register::C)),
       0x05 => Ok(Op::Decr(Register::B)),
+      0x35 => Ok(Op::Decr(Register::Hl)),
       // Add Ops
       0x80 => Ok(Op::Add(Register::B)),
       0x81 => Ok(Op::Add(Register::C)),
@@ -187,6 +189,7 @@ impl Emulator {
       0x83 => Ok(Op::Add(Register::E)),
       0x84 => Ok(Op::Add(Register::H)),
       0x85 => Ok(Op::Add(Register::L)),
+      0x86 => Ok(Op::Add(Register::Hl)),
       0x87 => Ok(Op::Add(Register::A)),
       // Sub Ops
       0x90 => Ok(Op::Sub(Register::B)),
@@ -195,6 +198,7 @@ impl Emulator {
       0x93 => Ok(Op::Sub(Register::E)),
       0x94 => Ok(Op::Sub(Register::H)),
       0x95 => Ok(Op::Sub(Register::L)),
+      0x96 => Ok(OP::Sub((Register::Hl)),
       0x97 => Ok(Op::Sub(Register::A)),
       // Bitwise & Ops
       0xa0 => Ok(Op::Ana(Register::B)),
@@ -203,6 +207,7 @@ impl Emulator {
       0xa3 => Ok(Op::Ana(Register::E)),
       0xa4 => Ok(Op::Ana(Register::H)),
       0xa5 => Ok(Op::Ana(Register::L)),
+      0xa6 => Ok(Op::Ana(Register::HL)),
       0xa7 => Ok(Op::Ana(Register::A)),
       // Bitwise XOR Ops
       0xa8 => Ok(Op::Xra(Register::B)),
@@ -211,6 +216,7 @@ impl Emulator {
       0xab => Ok(Op::Xra(Register::E)),
       0xac => Ok(Op::Xra(Register::H)),
       0xad => Ok(Op::Xra(Register::L)),
+      0xae => Ok(Op::Xra(Register::Hl)),
       0xaf => Ok(Op::Xra(Register::A)),
       // Bitwise OR Ops
       0xb0 => Ok(Op::Ora(Register::B)),
@@ -219,6 +225,7 @@ impl Emulator {
       0xb3 => Ok(Op::Ora(Register::E)),
       0xb4 => Ok(Op::Ora(Register::H)),
       0xb5 => Ok(Op::Ora(Register::L)),
+      0xb6 => Ok(Op::Ora(Register::Hl)),
       0xb7 => Ok(Op::Ora(Register::A)),
       // CMP Ops
       0xb8 => Ok(Op::Cmp(Register::B)),
@@ -599,18 +606,6 @@ impl Emulator {
           println!("INX SP");
           self.state.sp += 1;
         }
-        0x34 => {
-          println!("INCR M");
-          let (answer, _) = self.get_memory_at_hl().overflowing_add(1);
-          self.state.memory[self.get_hl() as usize] = answer;
-          self.set_flags(answer);
-        }
-        0x35 => {
-          println!("DCR M");
-          let (answer, _) = self.get_memory_at_hl().overflowing_sub(1);
-          self.state.memory[self.get_hl() as usize] = answer;
-          self.set_flags(answer);
-        }
         0x36 => {
           println!("MVI, M,D8");
           self.state.memory[self.get_hl() as usize] = self.state.memory[self.state.pc];
@@ -646,17 +641,6 @@ impl Emulator {
           } else {
             1
           }
-        }
-        0x86 => {
-          println!("ADD M");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.get_memory_at_hl());
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
         }
         0x88 => {
           println!("ADC B");
@@ -754,17 +738,6 @@ impl Emulator {
           };
           self.state.a = answer2;
         }
-        0x96 => {
-          println!("SUB M");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.get_memory_at_hl());
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-        }
         0x98 => {
           println!("SBB B");
           let (answer, overflowed) = self.state.a.overflowing_sub(self.state.b);
@@ -860,39 +833,6 @@ impl Emulator {
             0
           };
           self.state.a = answer2;
-        }
-        0xa6 => {
-          println!("ANA M");
-          let answer = self.state.a & self.get_memory_at_hl();
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xae => {
-          println!("XRA M");
-          let answer = self.state.a ^ self.get_memory_at_hl();
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-        }
-        0xb6 => {
-          println!("ORA M");
-          let answer = self.state.a | self.get_memory_at_hl();
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
         }
         0xc0 => {
           println!("{:04x}", self.state.pc);
