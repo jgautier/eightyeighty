@@ -37,6 +37,8 @@ enum Op {
   Cmp(Register),
   Adc(Register),
   Sbb(Register),
+  Lxi(Register, Register, u8, u8),
+  LxiSp(u8, u8),
 }
 
 impl Op {
@@ -54,6 +56,9 @@ impl Op {
       | Op::Cmp(_)
       | Op::Adc(_)
       | Op::Sbb(_) => 1,
+      
+      Op::Lxi(_, _, _, _) 
+      | Op::LxiSp(_, _) => 3,
     }
   }
   fn print(&self) {
@@ -69,6 +74,8 @@ impl Op {
       Op::Cmp(reg) => println!("CMP {}", reg.to_string()),
       Op::Adc(reg) => println!("ADC {}", reg.to_string()),
       Op::Sbb(reg) => println!("SBB {}", reg.to_string()),
+      Op::Lxi(reg1, reg2, _, _) => println!("LXI {}{}", reg1.to_string(), reg2.to_string()),
+      Op::LxiSp(_,_) => println!("LXI SP"),
       Op::Nop => println!("NOP")
     }
   }
@@ -167,7 +174,15 @@ impl Emulator {
 
   fn read_next_op(&self) -> Result<Op, u8> {
     let byte = self.state.memory[self.state.pc];
+    let byte2 = self.state.memory[self.state.pc + 1];
+    let byte3 = self.state.memory[self.state.pc + 2];
     match byte {
+      0x00 => Ok(Op::Nop),
+      // LXI Ops
+      0x01 => Ok(Op::Lxi(Register::B, Register::C, byte2, byte3)),
+      0x11 => Ok(Op::Lxi(Register::D, Register::E, byte2, byte3)),
+      0x21 => Ok(Op::Lxi(Register::H, Register::L, byte2, byte3)),
+      0x31 => Ok(Op::LxiSp(byte2, byte3)),
       // Increment Ops
       0x04 => Ok(Op::Incr(Register::B)),
       0x3c => Ok(Op::Incr(Register::A)),
@@ -431,6 +446,13 @@ impl Emulator {
         };
         self.state.a = answer2;
       }
+      Op::Lxi(reg1, reg2, val1, val2) => {
+        self.state.set_register(reg1, *val2);
+        self.state.set_register(reg2, *val1);
+      }
+      Op::LxiSp(val1, val2) => {
+        self.state.sp = u16::from_le_bytes([*val1, *val2]) as usize;
+      }
       Op::Mov(dest, source) => {
         self.state.set_register(dest, self.state.get_register(source))
       }
@@ -453,15 +475,6 @@ impl Emulator {
       };
       let op = self.get_current_op();
       match op {
-        0x00 => {
-          println!("NOP");
-        }
-        0x01 => {
-          println!("LXI B,D16");
-          self.state.b = self.state.memory[self.state.pc + 1];
-          self.state.c = self.state.memory[self.state.pc];
-          self.state.pc += 2;
-        }
         0x02 => {
           println!("STAX B");
           self.state.memory[self.get_bc() as usize] = self.state.a;
@@ -523,12 +536,6 @@ impl Emulator {
           };
           self.state.a = (self.state.a >> 1) | (rightmost << 7);
         }
-        0x11 => {
-          println!("LXI D,D16 {:x}, {:x}", self.state.memory[self.state.pc + 1], self.state.memory[self.state.pc]);
-          self.state.d = self.state.memory[self.state.pc + 1];
-          self.state.e = self.state.memory[self.state.pc];
-          self.state.pc += 2;
-        }
         0x12 => {
           println!("STAX D");
           self.state.memory[self.get_de() as usize] = self.state.a;
@@ -581,12 +588,6 @@ impl Emulator {
           self.state.a = (self.state.a >> 1) | (self.state.flags.cy << 7);
           self.state.flags.cy = rightmost;
         }
-        0x21 => {
-          println!("LXI H,D16 {:x}, {:x}", self.state.memory[self.state.pc + 1], self.state.memory[self.state.pc]);
-          self.state.h = self.state.memory[self.state.pc + 1];
-          self.state.l = self.state.memory[self.state.pc];
-          self.state.pc += 2;
-        }
         0x22 => {
           println!("SHLD ADR");
           let address = self.get_next_2_bytes_as_usize();
@@ -637,10 +638,6 @@ impl Emulator {
         0x2f => {
           println!("CMA");
           self.state.a = !self.state.a;
-        }
-        0x31 => {
-          println!("LXI SP, D16");
-          self.state.sp = self.get_next_2_bytes_as_usize();
         }
         0x32 => {
           println!("STA  {:x} {:x}", self.state.memory[self.state.pc + 1], self.state.memory[self.state.pc]);
