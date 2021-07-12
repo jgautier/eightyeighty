@@ -39,6 +39,7 @@ enum Op {
   Sbb(Register),
   Lxi(Register, Register, u8, u8),
   LxiSp(u8, u8),
+  Dad(Register, Register)
 }
 
 impl Op {
@@ -55,7 +56,8 @@ impl Op {
       | Op::Ora(_)
       | Op::Cmp(_)
       | Op::Adc(_)
-      | Op::Sbb(_) => 1,
+      | Op::Sbb(_)
+      | Op::Dad(_, _) => 1,
       
       Op::Lxi(_, _, _, _) 
       | Op::LxiSp(_, _) => 3,
@@ -76,6 +78,7 @@ impl Op {
       Op::Sbb(reg) => println!("SBB {}", reg.to_string()),
       Op::Lxi(reg1, reg2, _, _) => println!("LXI {}{}", reg1.to_string(), reg2.to_string()),
       Op::LxiSp(_,_) => println!("LXI SP"),
+      Op::Dad(reg1, reg2) => println!("DAD {}{}", reg1.to_string(), reg2.to_string()),
       Op::Nop => println!("NOP")
     }
   }
@@ -130,7 +133,7 @@ impl State {
       Register::L => self.l,
       Register::Hl => {
         self.memory[u16::from_le_bytes([self.l, self.h]) as usize]
-      }
+      },
     }
   }
 }
@@ -335,6 +338,10 @@ impl Emulator {
       0x75 => Ok(Op::Mov(Register::Hl, Register::L)),
       0x77 => Ok(Op::Mov(Register::Hl, Register::A)),
       0x7e => Ok(Op::Mov(Register::A, Register::Hl)),
+      // DAD Ops
+      0x09 => Ok(Op::Dad(Register::B, Register::C)),
+      0x19 => Ok(Op::Dad(Register::D, Register::E)),
+      0x29 => Ok(Op::Dad(Register::H, Register::L)),
       _ => Err(byte)
     }
   }
@@ -456,6 +463,19 @@ impl Emulator {
       Op::Mov(dest, source) => {
         self.state.set_register(dest, self.state.get_register(source))
       }
+      Op::Dad(reg1, reg2) => {
+        let val = u16::from_le_bytes([self.state.get_register(reg2), self.state.get_register(reg1)]) as u32;
+        let hl = self.get_hl() as u32;
+        let answer = hl + val;
+        self.state.flags.cy = if answer > u16::MAX as u32 {
+          1
+        } else {
+          0
+        };
+        let [l, h, _, _] = answer.to_le_bytes();
+        self.state.l = l;
+        self.state.h = h;
+      }
     };
     self.state.pc += &op_code.get_size();
   }
@@ -496,20 +516,6 @@ impl Emulator {
           let leftmost = self.state.a >> 7;
           self.state.flags.cy = leftmost;
           self.state.a = (self.state.a << 1) | leftmost;
-        }
-        0x09 => {
-          println!("DAD B");
-          let hl = self.get_hl() as u32;
-          let bc = self.get_bc() as u32;
-          let answer = hl + bc;
-          self.state.flags.cy = if answer > u16::MAX as u32 {
-            1
-          } else {
-            0
-          };
-          let [l, h, _, _] = answer.to_le_bytes();
-          self.state.l = l;
-          self.state.h = h;
         }
         0x0a => {
           println!("LDAX B");
@@ -557,16 +563,6 @@ impl Emulator {
           self.state.a = (self.state.a << 1) | self.state.flags.cy;
           self.state.flags.cy = leftmost;
         }
-        0x19 => {
-          println!("DAD D");
-          let hl = self.get_hl();
-          let de = self.get_de();
-          let answer = hl + de;
-          let [l, h] = answer.to_le_bytes();
-          self.state.l = l;
-          self.state.h = h;
-          //TODO set carry
-        }
         0x1a => {
           println!("LD A {:x}, {:x}", self.state.d, self.state.e);
           self.state.a = self.get_memory_at_de();
@@ -605,19 +601,6 @@ impl Emulator {
           self.state.h = self.state.memory[self.state.pc];
           self.state.pc += 1;
         }
-        0x29 => {
-          println!("DAD H");
-          let hl = self.get_hl() as u32;
-          let answer = hl * 2;
-          self.state.flags.cy = if answer > u16::MAX as u32 {
-            1
-          } else {
-            0
-          };
-          let [l, h, _, _] = answer.to_le_bytes();
-          self.state.h = h;
-          self.state.l = l;
-        }
         0x2a => {
           println!("LHLD adr");
           let address = self.get_next_2_bytes_as_usize();
@@ -628,7 +611,7 @@ impl Emulator {
           println!("DCX H");
           let [l, h] = (self.get_hl() - 1).to_le_bytes();
           self.state.h = h;
-          self.state.l = l;
+          self.state.l = l; 
         }
         0x2e => {
           println!("MVI L, D8");
