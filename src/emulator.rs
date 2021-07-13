@@ -39,7 +39,8 @@ enum Op {
   Sbb(Register),
   Lxi(Register, Register, u8, u8),
   LxiSp(u8, u8),
-  Dad(Register, Register)
+  Dad(Register, Register),
+  Mvi(Register, u8)
 }
 
 impl Op {
@@ -58,6 +59,8 @@ impl Op {
       | Op::Adc(_)
       | Op::Sbb(_)
       | Op::Dad(_, _) => 1,
+
+      Op::Mvi(_, _) => 2,
       
       Op::Lxi(_, _, _, _) 
       | Op::LxiSp(_, _) => 3,
@@ -79,6 +82,7 @@ impl Op {
       Op::Lxi(reg1, reg2, _, _) => println!("LXI {}{}", reg1.to_string(), reg2.to_string()),
       Op::LxiSp(_,_) => println!("LXI SP"),
       Op::Dad(reg1, reg2) => println!("DAD {}{}", reg1.to_string(), reg2.to_string()),
+      Op::Mvi(reg, val) => println!("MVI {},{}", reg.to_string(), val),
       Op::Nop => println!("NOP")
     }
   }
@@ -342,6 +346,15 @@ impl Emulator {
       0x09 => Ok(Op::Dad(Register::B, Register::C)),
       0x19 => Ok(Op::Dad(Register::D, Register::E)),
       0x29 => Ok(Op::Dad(Register::H, Register::L)),
+      // MVI Ops
+      0x06 => Ok(Op::Mvi(Register::B, byte2)),
+      0x0e => Ok(Op::Mvi(Register::C, byte2)),
+      0x16 => Ok(Op::Mvi(Register::D, byte2)),
+      0x1e => Ok(Op::Mvi(Register::E, byte2)),
+      0x26 => Ok(Op::Mvi(Register::H, byte2)),
+      0x2e => Ok(Op::Mvi(Register::L, byte2)),
+      0x36 => Ok(Op::Mvi(Register::Hl, byte2)),
+      0x3e => Ok(Op::Mvi(Register::A, byte2)),
       _ => Err(byte)
     }
   }
@@ -476,6 +489,9 @@ impl Emulator {
         self.state.l = l;
         self.state.h = h;
       }
+      Op::Mvi(reg, val) => {
+        self.state.set_register(reg, *val);
+      }
     };
     self.state.pc += &op_code.get_size();
   }
@@ -506,11 +522,6 @@ impl Emulator {
           self.state.b = b;
           self.state.c = c;
         }
-        0x06 => {
-          println!("MVI B {:x}", self.state.memory[self.state.pc]);
-          self.state.b = self.state.memory[self.state.pc];
-          self.state.pc += 1;
-        }
         0x07 => {
           println!("RLC");
           let leftmost = self.state.a >> 7;
@@ -526,11 +537,6 @@ impl Emulator {
           let [c, b] = (self.get_bc() - 1).to_le_bytes();
           self.state.b = b;
           self.state.c = c;
-        }
-        0x0e => {
-          println!("MVI, C,D8 {:x}", self.state.memory[self.state.pc]);
-          self.state.c = self.state.memory[self.state.pc];
-          self.state.pc += 1;
         }
         0x0f => {
           println!("RRC");
@@ -552,11 +558,6 @@ impl Emulator {
           self.state.d = d;
           self.state.e = e;
         }
-        0x16 => {
-          println!("MVI D D8");
-          self.state.d = self.state.memory[self.state.pc];
-          self.state.pc += 1;
-        }
         0x17 => {
           println!("RAL");
           let leftmost = self.state.a >> 7;
@@ -572,11 +573,6 @@ impl Emulator {
           let [e, d] = (self.get_de() - 1).to_le_bytes();
           self.state.d = d;
           self.state.e = e;
-        }
-        0x1e => {
-          println!("MVI E,D8");
-          self.state.e = self.state.memory[self.state.pc];
-          self.state.pc += 1;
         }
         0x1f => {
           println!("RAR");
@@ -596,11 +592,6 @@ impl Emulator {
           self.state.h = h;
           self.state.l = l;
         }
-        0x26 => {
-          println!("MVI H,D8 {:x}", self.state.memory[self.state.pc]);
-          self.state.h = self.state.memory[self.state.pc];
-          self.state.pc += 1;
-        }
         0x2a => {
           println!("LHLD adr");
           let address = self.get_next_2_bytes_as_usize();
@@ -613,11 +604,6 @@ impl Emulator {
           self.state.h = h;
           self.state.l = l; 
         }
-        0x2e => {
-          println!("MVI L, D8");
-          self.state.l = self.state.memory[self.state.pc];
-          self.state.pc += 1;
-        }
         0x2f => {
           println!("CMA");
           self.state.a = !self.state.a;
@@ -629,11 +615,6 @@ impl Emulator {
         0x33 => {
           println!("INX SP");
           self.state.sp += 1;
-        }
-        0x36 => {
-          println!("MVI, M,D8");
-          self.state.memory[self.get_hl() as usize] = self.state.memory[self.state.pc];
-          self.state.pc += 1;
         }
         0x37 => {
           println!("STC");
@@ -652,11 +633,6 @@ impl Emulator {
         0x3b => {
           println!("DCX SP");
           self.state.sp -= 1;
-        }
-        0x3e => {
-          println!("MVI  A,D8");
-          self.state.a = self.state.memory[self.state.pc];
-          self.state.pc += 1;
         }
         0x3f => {
           println!("CMC");
