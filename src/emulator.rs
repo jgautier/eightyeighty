@@ -46,7 +46,8 @@ enum Op {
   Dad(Register, Register),
   Mvi(Register, u8),
   Stax(Register),
-  Inx(Register)
+  Inx(Register),
+  Dcx(Register)
 }
 
 impl Op {
@@ -66,7 +67,8 @@ impl Op {
       | Op::Sbb(_)
       | Op::Dad(_, _)
       | Op::Stax(_)
-      | Op::Inx(_) => 1,
+      | Op::Inx(_)
+      | Op::Dcx(_) => 1,
 
       Op::Mvi(_, _) => 2,
       
@@ -93,6 +95,7 @@ impl Op {
       Op::Mvi(reg, val) => println!("MVI {},{}", reg.to_string(), val),
       Op::Stax(reg) => println!("STAX {}", reg.to_string()),
       Op::Inx(reg) => println!("INX {}", reg.to_string()),
+      Op::Dcx(reg) => println!("INX {}", reg.to_string()),
       Op::Nop => println!("NOP")
     }
   }
@@ -420,6 +423,10 @@ impl Emulator {
       0x03 => Ok(Op::Inx(Register::Bc)),
       0x13 => Ok(Op::Inx(Register::De)),
       0x23 => Ok(Op::Inx(Register::Hl)),
+      // DCX Ops
+      0x0b => Ok(Op::Dcx(Register::Bc)),
+      0x1b => Ok(Op::Dcx(Register::De)),
+      0x2b => Ok(Op::Dcx(Register::Hl)),
       _ => Err(byte)
     }
   }
@@ -563,6 +570,9 @@ impl Emulator {
       Op::Inx(reg) => {
         self.state.set_register_16(reg, self.state.get_register_16(reg).overflowing_add(1).0)
       }
+      Op::Dcx(reg) => {
+        self.state.set_register_16(reg, self.state.get_register_16(reg).overflowing_sub(1).0)
+      }
     };
     self.state.pc += &op_code.get_size();
   }
@@ -592,12 +602,6 @@ impl Emulator {
           println!("LDAX B");
           self.state.a = self.get_memory_at_bc();
         }
-        0x0b => {
-          println!("DCX B");
-          let [c, b] = (self.get_bc() - 1).to_le_bytes();
-          self.state.b = b;
-          self.state.c = c;
-        }
         0x0f => {
           println!("RRC");
           let rightmost = self.state.a & 1;
@@ -618,12 +622,6 @@ impl Emulator {
           println!("LD A {:x}, {:x}", self.state.d, self.state.e);
           self.state.a = self.get_memory_at_de();
         }
-        0x1b => {
-          println!("DCX D");
-          let [e, d] = (self.get_de() - 1).to_le_bytes();
-          self.state.d = d;
-          self.state.e = e;
-        }
         0x1f => {
           println!("RAR");
           let rightmost = self.state.a & 1;
@@ -641,12 +639,6 @@ impl Emulator {
           let address = self.get_next_2_bytes_as_usize();
           self.state.l = self.state.memory[address];
           self.state.h = self.state.memory[address + 1];
-        }
-        0x2b => {
-          println!("DCX H");
-          let [l, h] = (self.get_hl() - 1).to_le_bytes();
-          self.state.h = h;
-          self.state.l = l; 
         }
         0x2f => {
           println!("CMA");
