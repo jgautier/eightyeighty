@@ -45,7 +45,8 @@ enum Op {
   LxiSp(u8, u8),
   Dad(Register, Register),
   Mvi(Register, u8),
-  Stax(Register)
+  Stax(Register),
+  Inx(Register)
 }
 
 impl Op {
@@ -64,7 +65,8 @@ impl Op {
       | Op::Adc(_)
       | Op::Sbb(_)
       | Op::Dad(_, _)
-      | Op::Stax(_) => 1,
+      | Op::Stax(_)
+      | Op::Inx(_) => 1,
 
       Op::Mvi(_, _) => 2,
       
@@ -90,6 +92,7 @@ impl Op {
       Op::Dad(reg1, reg2) => println!("DAD {}{}", reg1.to_string(), reg2.to_string()),
       Op::Mvi(reg, val) => println!("MVI {},{}", reg.to_string(), val),
       Op::Stax(reg) => println!("STAX {}", reg.to_string()),
+      Op::Inx(reg) => println!("INX {}", reg.to_string()),
       Op::Nop => println!("NOP")
     }
   }
@@ -119,6 +122,42 @@ struct State {
 }
 
 impl State {
+  fn set_register_16(&mut self, reg: &Register, value: u16) {
+    let [val1, val2] = value.to_le_bytes();
+    match reg {
+      Register::Hl => {
+        self.h = val2;
+        self.l = val1;
+      }
+      Register::Bc => {
+        self.b = val2;
+        self.c = val1;
+      }
+      Register::De => {
+        self.d = val2;
+        self.e = val1;
+      }
+      _ => {
+        panic!("Unsupported for register type {}", reg.to_string())
+      }
+    }
+  }
+  fn get_register_16(&self, reg: &Register) -> u16 {
+    match reg {
+      Register::Bc => {
+        u16::from_le_bytes([self.c, self.b])
+      }
+      Register::De => {
+        u16::from_le_bytes([self.e, self.d])
+      }
+      Register::Hl => {
+        u16::from_le_bytes([self.l, self.h])
+      }
+      _ => {
+        panic!("Unsupported for register type {}", reg.to_string())
+      }
+    }
+  }
   fn set_register(&mut self, reg: &Register, value: u8) {
     match reg {
       Register::A => self.a = value,
@@ -377,6 +416,10 @@ impl Emulator {
       // STAX ops
       0x02 => Ok(Op::Stax(Register::Bc)),
       0x12 => Ok(Op::Stax(Register::De)),
+      // INX Ops
+      0x03 => Ok(Op::Inx(Register::Bc)),
+      0x13 => Ok(Op::Inx(Register::De)),
+      0x23 => Ok(Op::Inx(Register::Hl)),
       _ => Err(byte)
     }
   }
@@ -517,6 +560,9 @@ impl Emulator {
       Op::Stax(reg) => {
         self.state.set_register(reg, self.state.a)
       }
+      Op::Inx(reg) => {
+        self.state.set_register_16(reg, self.state.get_register_16(reg).overflowing_add(1).0)
+      }
     };
     self.state.pc += &op_code.get_size();
   }
@@ -536,13 +582,6 @@ impl Emulator {
       };
       let op = self.get_current_op();
       match op {
-        0x03 => {
-          println!("INX B");
-          let (answer, _) = self.get_bc().overflowing_add(1);
-          let [c, b] = answer.to_le_bytes();
-          self.state.b = b;
-          self.state.c = c;
-        }
         0x07 => {
           println!("RLC");
           let leftmost = self.state.a >> 7;
@@ -568,12 +607,6 @@ impl Emulator {
             0
           };
           self.state.a = (self.state.a >> 1) | (rightmost << 7);
-        }
-        0x13 => {
-          println!("INCX DE");
-          let [e, d] = (u16::from_le_bytes([self.state.e, self.state.d]) + 1).to_le_bytes();
-          self.state.d = d;
-          self.state.e = e;
         }
         0x17 => {
           println!("RAL");
@@ -602,12 +635,6 @@ impl Emulator {
           let address = self.get_next_2_bytes_as_usize();
           self.state.memory[address] = self.state.l;
           self.state.memory[address + 1] = self.state.h;
-        }
-        0x23 => {
-          println!("INCX HL");
-          let [l, h] = (self.get_hl() + 1).to_le_bytes();
-          self.state.h = h;
-          self.state.l = l;
         }
         0x2a => {
           println!("LHLD adr");
