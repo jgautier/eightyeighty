@@ -47,7 +47,8 @@ enum Op {
   Mvi(Register, u8),
   Stax(Register),
   Inx(Register),
-  Dcx(Register)
+  Dcx(Register),
+  Ldax(Register)
 }
 
 impl Op {
@@ -68,7 +69,8 @@ impl Op {
       | Op::Dad(_, _)
       | Op::Stax(_)
       | Op::Inx(_)
-      | Op::Dcx(_) => 1,
+      | Op::Dcx(_)
+      | Op::Ldax(_) => 1,
 
       Op::Mvi(_, _) => 2,
       
@@ -95,7 +97,8 @@ impl Op {
       Op::Mvi(reg, val) => println!("MVI {},{}", reg.to_string(), val),
       Op::Stax(reg) => println!("STAX {}", reg.to_string()),
       Op::Inx(reg) => println!("INX {}", reg.to_string()),
-      Op::Dcx(reg) => println!("INX {}", reg.to_string()),
+      Op::Dcx(reg) => println!("DCX {}", reg.to_string()),
+      Op::Ldax(reg) => println!("DCX {}", reg.to_string()),
       Op::Nop => println!("NOP")
     }
   }
@@ -427,6 +430,9 @@ impl Emulator {
       0x0b => Ok(Op::Dcx(Register::Bc)),
       0x1b => Ok(Op::Dcx(Register::De)),
       0x2b => Ok(Op::Dcx(Register::Hl)),
+      // LDAX Ops
+      0x0a => Ok(Op::Ldax(Register::Bc)),
+      0x1a => Ok(Op::Ldax(Register::De)),
       _ => Err(byte)
     }
   }
@@ -572,6 +578,9 @@ impl Emulator {
       }
       Op::Dcx(reg) => {
         self.state.set_register_16(reg, self.state.get_register_16(reg).overflowing_sub(1).0)
+      },
+      Op::Ldax(reg) => {
+        self.state.a = self.state.get_register(reg)
       }
     };
     self.state.pc += &op_code.get_size();
@@ -598,10 +607,6 @@ impl Emulator {
           self.state.flags.cy = leftmost;
           self.state.a = (self.state.a << 1) | leftmost;
         }
-        0x0a => {
-          println!("LDAX B");
-          self.state.a = self.get_memory_at_bc();
-        }
         0x0f => {
           println!("RRC");
           let rightmost = self.state.a & 1;
@@ -617,11 +622,7 @@ impl Emulator {
           let leftmost = self.state.a >> 7;
           self.state.a = (self.state.a << 1) | self.state.flags.cy;
           self.state.flags.cy = leftmost;
-        }
-        0x1a => {
-          println!("LD A {:x}, {:x}", self.state.d, self.state.e);
-          self.state.a = self.get_memory_at_de();
-        }
+        } 
         0x1f => {
           println!("RAR");
           let rightmost = self.state.a & 1;
