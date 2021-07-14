@@ -6,7 +6,9 @@ enum Register {
   E,
   H,
   L,
-  Hl
+  Hl,
+  Bc,
+  De
 }
 
 impl Register {
@@ -19,7 +21,9 @@ impl Register {
       Register::E => "E",
       Register::H => "H",
       Register::L => "L",
-      Register::Hl => "HL"
+      Register::Hl => "HL",
+      Register::Bc => "BC",
+      Register::De => "DE"
     }
   }
 }
@@ -40,7 +44,8 @@ enum Op {
   Lxi(Register, Register, u8, u8),
   LxiSp(u8, u8),
   Dad(Register, Register),
-  Mvi(Register, u8)
+  Mvi(Register, u8),
+  Stax(Register)
 }
 
 impl Op {
@@ -58,7 +63,8 @@ impl Op {
       | Op::Cmp(_)
       | Op::Adc(_)
       | Op::Sbb(_)
-      | Op::Dad(_, _) => 1,
+      | Op::Dad(_, _)
+      | Op::Stax(_) => 1,
 
       Op::Mvi(_, _) => 2,
       
@@ -83,6 +89,7 @@ impl Op {
       Op::LxiSp(_,_) => println!("LXI SP"),
       Op::Dad(reg1, reg2) => println!("DAD {}{}", reg1.to_string(), reg2.to_string()),
       Op::Mvi(reg, val) => println!("MVI {},{}", reg.to_string(), val),
+      Op::Stax(reg) => println!("STAX {}", reg.to_string()),
       Op::Nop => println!("NOP")
     }
   }
@@ -123,6 +130,12 @@ impl State {
       Register::L => self.l = value,
       Register::Hl => {
         self.memory[u16::from_le_bytes([self.l, self.h]) as usize] = value
+      },
+      Register::Bc => {
+        self.memory[u16::from_le_bytes([self.c, self.b]) as usize] = value
+      }
+      Register::De => {
+        self.memory[u16::from_le_bytes([self.e, self.d]) as usize] = value
       }
     }
   }
@@ -138,6 +151,12 @@ impl State {
       Register::Hl => {
         self.memory[u16::from_le_bytes([self.l, self.h]) as usize]
       },
+      Register::Bc => {
+        self.memory[u16::from_le_bytes([self.c, self.b]) as usize]
+      },
+      Register::De => {
+        self.memory[u16::from_le_bytes([self.e, self.d]) as usize]
+      }
     }
   }
 }
@@ -355,6 +374,9 @@ impl Emulator {
       0x2e => Ok(Op::Mvi(Register::L, byte2)),
       0x36 => Ok(Op::Mvi(Register::Hl, byte2)),
       0x3e => Ok(Op::Mvi(Register::A, byte2)),
+      // STAX ops
+      0x02 => Ok(Op::Stax(Register::Bc)),
+      0x12 => Ok(Op::Stax(Register::De)),
       _ => Err(byte)
     }
   }
@@ -492,6 +514,9 @@ impl Emulator {
       Op::Mvi(reg, val) => {
         self.state.set_register(reg, *val);
       }
+      Op::Stax(reg) => {
+        self.state.set_register(reg, self.state.a)
+      }
     };
     self.state.pc += &op_code.get_size();
   }
@@ -511,10 +536,6 @@ impl Emulator {
       };
       let op = self.get_current_op();
       match op {
-        0x02 => {
-          println!("STAX B");
-          self.state.memory[self.get_bc() as usize] = self.state.a;
-        }
         0x03 => {
           println!("INX B");
           let (answer, _) = self.get_bc().overflowing_add(1);
@@ -547,10 +568,6 @@ impl Emulator {
             0
           };
           self.state.a = (self.state.a >> 1) | (rightmost << 7);
-        }
-        0x12 => {
-          println!("STAX D");
-          self.state.memory[self.get_de() as usize] = self.state.a;
         }
         0x13 => {
           println!("INCX DE");
