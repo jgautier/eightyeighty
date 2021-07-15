@@ -48,7 +48,9 @@ enum Op {
   Stax(Register),
   Inx(Register),
   Dcx(Register),
-  Ldax(Register)
+  Ldax(Register),
+  Push(Register, Register),
+  Pop(Register, Register)
 }
 
 impl Op {
@@ -70,7 +72,9 @@ impl Op {
       | Op::Stax(_)
       | Op::Inx(_)
       | Op::Dcx(_)
-      | Op::Ldax(_) => 1,
+      | Op::Ldax(_)
+      | Op::Push(_, _)
+      | Op::Pop(_, _) => 1,
 
       Op::Mvi(_, _) => 2,
       
@@ -99,6 +103,8 @@ impl Op {
       Op::Inx(reg) => println!("INX {}", reg.to_string()),
       Op::Dcx(reg) => println!("DCX {}", reg.to_string()),
       Op::Ldax(reg) => println!("DCX {}", reg.to_string()),
+      Op::Push(reg, _) => println!("PUSH {}", reg.to_string()),
+      Op::Pop(reg, _) => println!("POP {}", reg.to_string()),
       Op::Nop => println!("NOP")
     }
   }
@@ -433,6 +439,14 @@ impl Emulator {
       // LDAX Ops
       0x0a => Ok(Op::Ldax(Register::Bc)),
       0x1a => Ok(Op::Ldax(Register::De)),
+      // PUSH Ops
+      0xc5 => Ok(Op::Push(Register::B, Register::C)),
+      0xd5 => Ok(Op::Push(Register::D, Register::E)),
+      0xe5 => Ok(Op::Push(Register::H, Register::L)),
+      // POP Ops
+      0xc1 => Ok(Op::Pop(Register::B, Register::C)),
+      0xd1 => Ok(Op::Pop(Register::D, Register::E)),
+      0xe1 => Ok(Op::Pop(Register::H, Register::L)),
       _ => Err(byte)
     }
   }
@@ -582,6 +596,16 @@ impl Emulator {
       Op::Ldax(reg) => {
         self.state.a = self.state.get_register(reg)
       }
+      Op::Push(reg1, reg2) => {
+        self.state.memory[self.state.sp - 2] = self.state.get_register(reg2);
+        self.state.memory[self.state.sp - 1] = self.state.get_register(reg1);
+        self.state.sp -= 2;
+      }
+      Op::Pop(reg1, reg2) => {
+        self.state.set_register(reg2, self.state.memory[self.state.sp]);
+        self.state.set_register(reg1, self.state.memory[self.state.sp + 1]);
+        self.state.sp += 2;
+      }
     };
     self.state.pc += &op_code.get_size();
   }
@@ -687,12 +711,6 @@ impl Emulator {
             self.state.sp += 2; 
           }
         }
-        0xc1 => {
-          println!("POP B");
-          self.state.c = self.state.memory[self.state.sp];
-          self.state.b = self.state.memory[self.state.sp + 1];
-          self.state.sp += 2;
-        }
         0xc2 => {
           println!("JNZ {:x}{:x}", self.state.memory[self.state.pc + 1], self.state.memory[self.state.pc]);
           if self.state.flags.z == 0 {
@@ -715,12 +733,6 @@ impl Emulator {
             self.state.sp -= 2;
             self.state.pc = address;
           }
-        }
-        0xc5 => {
-          println!("PUSH B");
-          self.state.memory[self.state.sp - 2] = self.state.c;
-          self.state.memory[self.state.sp - 1] = self.state.b;
-          self.state.sp -= 2;
         }
         0xc6 => {
           println!("ADI {:x}", self.state.memory[self.state.pc]);
@@ -807,12 +819,6 @@ impl Emulator {
             self.state.sp += 2; 
           }
         }
-        0xd1 => {
-          println!("POP D");
-          self.state.e = self.state.memory[self.state.sp];
-          self.state.d = self.state.memory[self.state.sp + 1];
-          self.state.sp += 2;
-        }
         0xd2 => {
           println!("JNC");
           let address = self.get_next_2_bytes_as_usize();
@@ -836,12 +842,6 @@ impl Emulator {
             self.state.sp -= 2;
             self.state.pc = address;
           }
-        }
-        0xd5 => {
-          println!("PUSH D");
-          self.state.memory[self.state.sp - 2] = self.state.e;
-          self.state.memory[self.state.sp - 1] = self.state.d;
-          self.state.sp -= 2;
         }
         0xd6 => {
           println!("SUI D8");
@@ -900,12 +900,6 @@ impl Emulator {
             self.state.sp += 2; 
           }
         }
-        0xe1 => {
-          println!("POP H");
-          self.state.l = self.state.memory[self.state.sp];
-          self.state.h = self.state.memory[self.state.sp + 1];
-          self.state.sp += 2;
-        }
         0xe2 => {
           println!("JPO adr");
           let address = self.get_next_2_bytes_as_usize();
@@ -928,12 +922,6 @@ impl Emulator {
             self.state.sp -= 2;
             self.state.pc = address;
           }
-        }
-        0xe5 => {
-          println!("PUSH H");
-          self.state.memory[self.state.sp - 2] = self.state.l;
-          self.state.memory[self.state.sp - 1] = self.state.h;
-          self.state.sp -=2;
         }
         0xe6 => {
           println!("ANI D8");
