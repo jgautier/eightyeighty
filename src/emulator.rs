@@ -570,7 +570,7 @@ impl Emulator {
       }
       Op::Dad(reg1, reg2) => {
         let val = u16::from_le_bytes([self.state.get_register(reg2), self.state.get_register(reg1)]) as u32;
-        let hl = self.get_hl() as u32;
+        let hl = self.state.get_register_16(&Register::Hl) as u32;
         let answer = hl + val;
         self.state.flags.cy = if answer > u16::MAX as u32 {
           1
