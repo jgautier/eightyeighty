@@ -50,7 +50,16 @@ enum Op {
   Dcx(Register),
   Ldax(Register),
   Push(Register, Register),
-  Pop(Register, Register)
+  Pop(Register, Register),
+  Rlc(),
+  Rrc(),
+  Ral(),
+  Rar(),
+  Shld(usize),
+  Lhld(usize),
+  Cma(),
+  Sta(usize),
+  InxSp()
 }
 
 impl Op {
@@ -74,12 +83,21 @@ impl Op {
       | Op::Dcx(_)
       | Op::Ldax(_)
       | Op::Push(_, _)
-      | Op::Pop(_, _) => 1,
+      | Op::Pop(_, _)
+      | Op::Rlc()
+      | Op::Rrc()
+      | Op::Ral()
+      | Op::Rar()
+      | Op::Cma()
+      | Op::InxSp() => 1,
 
-      Op::Mvi(_, _) => 2,
+      Op::Mvi(_, _)  => 2,
       
       Op::Lxi(_, _, _, _) 
-      | Op::LxiSp(_, _) => 3,
+      | Op::LxiSp(_, _)
+      | Op::Shld(_)
+      | Op::Lhld(_)
+      | Op::Sta(_) => 3,
     }
   }
   fn print(&self) {
@@ -105,6 +123,15 @@ impl Op {
       Op::Ldax(reg) => println!("DCX {}", reg.to_string()),
       Op::Push(reg, _) => println!("PUSH {}", reg.to_string()),
       Op::Pop(reg, _) => println!("POP {}", reg.to_string()),
+      Op::Rlc() => println!("RLC"),
+      Op::Rrc() => println!("RRC"),
+      Op::Ral() => println!("RAL"),
+      Op::Rar() => println!("RAR"),
+      Op::Shld(_) => println!("SHLD"),
+      Op::Lhld(_) => println!("LHLD"),
+      Op::Cma() => println!("CMA"),
+      Op::Sta(_) => println!("STA"),
+      Op::InxSp() => println!("INX SP"),
       Op::Nop => println!("NOP")
     }
   }
@@ -253,6 +280,7 @@ impl Emulator {
     let byte = self.state.memory[self.state.pc];
     let byte2 = self.state.memory[self.state.pc + 1];
     let byte3 = self.state.memory[self.state.pc + 2];
+    let bytes_as_usize = u16::from_le_bytes([byte2, byte3]) as usize;
     match byte {
       0x00 => Ok(Op::Nop),
       // LXI Ops
@@ -447,6 +475,23 @@ impl Emulator {
       0xc1 => Ok(Op::Pop(Register::B, Register::C)),
       0xd1 => Ok(Op::Pop(Register::D, Register::E)),
       0xe1 => Ok(Op::Pop(Register::H, Register::L)),
+      // RLC
+      0x07 => Ok(Op::Rlc()),
+      // RRC
+      0x0f => Ok(Op::Rrc()),
+      // RAL
+      0x17 => Ok(Op::Ral()),
+      // RAR
+      0x1f => Ok(Op::Rar()),
+      // SHLD/LHLD
+      0x22 => Ok(Op::Shld(bytes_as_usize)),
+      0x2a => Ok(Op::Lhld(bytes_as_usize)),
+      // CMA
+      0x2f => Ok(Op::Cma()),
+      // STA
+      0x32 => Ok(Op::Sta(bytes_as_usize)),
+      // INX SP
+      0x33 => Ok(Op::InxSp()),
       _ => Err(byte)
     }
   }
@@ -606,6 +651,47 @@ impl Emulator {
         self.state.set_register(reg1, self.state.memory[self.state.sp + 1]);
         self.state.sp += 2;
       }
+      Op::Rlc() => {
+        let leftmost = self.state.a >> 7;
+        self.state.flags.cy = leftmost;
+        self.state.a = (self.state.a << 1) | leftmost;
+      }
+      Op::Rrc() => {
+        let rightmost = self.state.a & 1;
+        self.state.flags.cy = if rightmost == 1 {
+          1
+        } else {
+          0
+        };
+        self.state.a = (self.state.a >> 1) | (rightmost << 7);
+      }
+      Op::Ral() => {
+        let leftmost = self.state.a >> 7;
+        self.state.a = (self.state.a << 1) | self.state.flags.cy;
+        self.state.flags.cy = leftmost;
+      }
+      Op::Rar() => {
+        let rightmost = self.state.a & 1;
+        self.state.a = (self.state.a >> 1) | (self.state.flags.cy << 7);
+        self.state.flags.cy = rightmost;
+      }
+      Op::Shld(address) => {
+        self.state.memory[*address] = self.state.l;
+        self.state.memory[address + 1] = self.state.h;
+      }
+      Op::Lhld(address) => {
+        self.state.l = self.state.memory[*address];
+        self.state.h = self.state.memory[address + 1];
+      }
+      Op::Cma() => {
+        self.state.a = !self.state.a;
+      }
+      Op::Sta(address) => {
+        self.state.memory[*address] = self.state.a;
+      }
+      Op::InxSp() => {
+        self.state.sp +=1 ;
+      }
     };
     self.state.pc += &op_code.get_size();
   }
@@ -625,58 +711,6 @@ impl Emulator {
       };
       let op = self.get_current_op();
       match op {
-        0x07 => {
-          println!("RLC");
-          let leftmost = self.state.a >> 7;
-          self.state.flags.cy = leftmost;
-          self.state.a = (self.state.a << 1) | leftmost;
-        }
-        0x0f => {
-          println!("RRC");
-          let rightmost = self.state.a & 1;
-          self.state.flags.cy = if rightmost == 1 {
-            1
-          } else {
-            0
-          };
-          self.state.a = (self.state.a >> 1) | (rightmost << 7);
-        }
-        0x17 => {
-          println!("RAL");
-          let leftmost = self.state.a >> 7;
-          self.state.a = (self.state.a << 1) | self.state.flags.cy;
-          self.state.flags.cy = leftmost;
-        } 
-        0x1f => {
-          println!("RAR");
-          let rightmost = self.state.a & 1;
-          self.state.a = (self.state.a >> 1) | (self.state.flags.cy << 7);
-          self.state.flags.cy = rightmost;
-        }
-        0x22 => {
-          println!("SHLD ADR");
-          let address = self.get_next_2_bytes_as_usize();
-          self.state.memory[address] = self.state.l;
-          self.state.memory[address + 1] = self.state.h;
-        }
-        0x2a => {
-          println!("LHLD adr");
-          let address = self.get_next_2_bytes_as_usize();
-          self.state.l = self.state.memory[address];
-          self.state.h = self.state.memory[address + 1];
-        }
-        0x2f => {
-          println!("CMA");
-          self.state.a = !self.state.a;
-        }
-        0x32 => {
-          println!("STA  {:x} {:x}", self.state.memory[self.state.pc + 1], self.state.memory[self.state.pc]);
-          self.state.memory[self.get_next_2_bytes_as_usize()] = self.state.a;
-        }
-        0x33 => {
-          println!("INX SP");
-          self.state.sp += 1;
-        }
         0x37 => {
           println!("STC");
           self.state.flags.cy = 1;
