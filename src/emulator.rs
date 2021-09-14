@@ -72,7 +72,9 @@ enum Op {
   Adi(),
   Rz(),
   Ret(),
-  Jz(usize)
+  Jz(usize),
+  Cz(usize),
+  Call(usize)
 }
 
 impl Op {
@@ -123,7 +125,9 @@ impl Op {
       | Op::Jnz(_)
       | Op::Jmp(_)
       | Op::Cnz(_)
-      | Op::Jz(_) => 3,
+      | Op::Jz(_)
+      | Op::Cz(_)
+      | Op::Call(_) => 3,
     }
   }
   fn print(&self) {
@@ -171,6 +175,8 @@ impl Op {
       Op::Rz() => println!("RZ"),
       Op::Ret() => println!("RET"),
       Op::Jz(_) => println!("JZ"),
+      Op::Cz(_) => println!("CZ"),
+      Op::Call(_) => println!("CALL"),
       Op::Nop => println!("NOP")
     }
   }
@@ -557,6 +563,10 @@ impl Emulator {
       0xc9 => Ok(Op::Ret()),
       // JZ
       0xca => Ok(Op::Jz(bytes_as_usize)),
+      // CZ
+      0xcc => Ok(Op::Cz(bytes_as_usize)),
+      // CALL
+      0xcd => Ok(Op::Call(bytes_as_usize)),
       _ => Err(byte)
     }
   }
@@ -840,6 +850,38 @@ impl Emulator {
           should_increment_pc = false
         }
       }
+      Op::Cz(val) => {
+        println!("CZ adr");
+        if self.state.flags.z == 1 {
+          // the pc hasn't been incremented yet so increment it manually
+          let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+          self.state.memory[self.state.sp - 1] = return_address[0];
+          self.state.memory[self.state.sp - 2] = return_address[1];
+          self.state.sp -= 2;
+          self.state.pc = *val;
+          should_increment_pc = false
+        }
+      }
+      Op::Call(val) => {
+        let address = *val;
+        if address == 5 && self.state.c == 9 {
+            let mut offset = (self.get_de() + 3) as usize;
+            while self.state.memory[offset] != 36 {
+              print!("{}", self.state.memory[offset] as char);
+              offset += 1;
+            }
+            println!();
+            std::process::exit(0);
+        }
+        // pc hasn't been incremented yet
+        let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+        self.state.memory[self.state.sp - 1] = return_address[0];
+        self.state.memory[self.state.sp - 2] = return_address[1];
+        self.state.sp -= 2;
+        self.state.pc = address;
+        should_increment_pc = false
+
+      }
     };
     if should_increment_pc {
       self.state.pc += &op_code.get_size();
@@ -861,35 +903,6 @@ impl Emulator {
       };
       let op = self.get_current_op();
       match op {
-        0xcc => {
-          println!("CZ adr");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.z == 1 {
-            let return_address = ((self.state.pc) as u16).to_le_bytes();
-            self.state.memory[self.state.sp - 1] = return_address[0];
-            self.state.memory[self.state.sp - 2] = return_address[1];
-            self.state.sp -= 2;
-            self.state.pc = address;
-          }
-        }
-        0xcd => {
-          println!("CALL {:x} {:x}", self.state.memory[self.state.pc + 1], self.state.memory[self.state.pc]);
-          let address = self.get_next_2_bytes_as_usize();
-          if address == 5 && self.state.c == 9 {
-              let mut offset = (self.get_de() + 3) as usize;
-              while self.state.memory[offset] != 36 {
-                print!("{}", self.state.memory[offset] as char);
-                offset += 1;
-              }
-              println!();
-              std::process::exit(0);
-          }
-          let return_address = ((self.state.pc) as u16).to_le_bytes();
-          self.state.memory[self.state.sp - 1] = return_address[0];
-          self.state.memory[self.state.sp - 2] = return_address[1];
-          self.state.sp -= 2;
-          self.state.pc = address;
-        }
         0xce => {
           println!("ACI D8");
           let (answer, overflowed) = self.state.a.overflowing_add(self.state.memory[self.state.pc] + self.state.flags.cy);
