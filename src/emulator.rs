@@ -74,7 +74,10 @@ enum Op {
   Ret(),
   Jz(usize),
   Cz(usize),
-  Call(usize)
+  Call(usize),
+  Aci(),
+  Rnc(),
+  Jnc(usize)
 }
 
 impl Op {
@@ -112,7 +115,9 @@ impl Op {
       | Op::Rnz()
       | Op::Adi()
       | Op::Rz()
-      | Op::Ret() => 1,
+      | Op::Ret()
+      | Op::Aci()
+      | Op::Rnc() => 1,
 
       Op::Mvi(_, _)  => 2,
       
@@ -127,7 +132,8 @@ impl Op {
       | Op::Cnz(_)
       | Op::Jz(_)
       | Op::Cz(_)
-      | Op::Call(_) => 3,
+      | Op::Call(_)
+      | Op::Jnc(_) => 3,
     }
   }
   fn print(&self) {
@@ -177,6 +183,9 @@ impl Op {
       Op::Jz(_) => println!("JZ"),
       Op::Cz(_) => println!("CZ"),
       Op::Call(_) => println!("CALL"),
+      Op::Aci() => println!("ACI"),
+      Op::Rnc() => println!("RNC"),
+      Op::Jnc(_) => println!("JNC"),
       Op::Nop => println!("NOP")
     }
   }
@@ -567,6 +576,9 @@ impl Emulator {
       0xcc => Ok(Op::Cz(bytes_as_usize)),
       // CALL
       0xcd => Ok(Op::Call(bytes_as_usize)),
+      0xce => Ok(Op::Aci()),
+      0xd0 => Ok(Op::Rnc()),
+      0xd2 => Ok(Op::Jnc(bytes_as_usize)),
       _ => Err(byte)
     }
   }
@@ -880,7 +892,30 @@ impl Emulator {
         self.state.sp -= 2;
         self.state.pc = address;
         should_increment_pc = false
-
+      }
+      Op::Aci() => {
+        let (answer, overflowed) = self.state.a.overflowing_add(self.state.memory[self.state.pc + 1] + self.state.flags.cy);
+        self.set_flags(answer);
+        self.state.flags.cy = if overflowed {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer;
+        self.state.pc += 1;
+      },
+      Op::Rnc() => {
+        if self.state.flags.cy == 0 {
+          self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
+          self.state.sp += 2; 
+          should_increment_pc = false
+        }
+      }
+      Op::Jnc(val) => {
+        if self.state.flags.cy == 0 {
+          self.state.pc = *val;
+          should_increment_pc = false
+        }
       }
     };
     if should_increment_pc {
@@ -903,33 +938,6 @@ impl Emulator {
       };
       let op = self.get_current_op();
       match op {
-        0xce => {
-          println!("ACI D8");
-          let (answer, overflowed) = self.state.a.overflowing_add(self.state.memory[self.state.pc] + self.state.flags.cy);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-          self.state.pc += 1;
-        }
-        0xd0 => {
-          print!("RNC");
-          if self.state.flags.cy == 0 {
-            self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
-            self.state.sp += 2; 
-          }
-        }
-        0xd2 => {
-          println!("JNC");
-          let address = self.get_next_2_bytes_as_usize();
-          self.state.pc = address;
-          if self.state.flags.cy == 0 {
-            self.state.pc = address;
-          }
-        }
         0xd3 => {
           println!("SPECIAL");
           // TODO ???
