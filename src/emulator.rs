@@ -77,7 +77,13 @@ enum Op {
   Call(usize),
   Aci(),
   Rnc(),
-  Jnc(usize)
+  Jnc(usize),
+  Cnc(usize),
+  Sui(),
+  Rc(),
+  Jc(usize),
+  Cc(usize),
+  Sbi()
 }
 
 impl Op {
@@ -117,7 +123,10 @@ impl Op {
       | Op::Rz()
       | Op::Ret()
       | Op::Aci()
-      | Op::Rnc() => 1,
+      | Op::Rnc()
+      | Op::Sui()
+      | Op::Rc()
+      | Op::Sbi() => 1,
 
       Op::Mvi(_, _)  => 2,
       
@@ -133,7 +142,10 @@ impl Op {
       | Op::Jz(_)
       | Op::Cz(_)
       | Op::Call(_)
-      | Op::Jnc(_) => 3,
+      | Op::Jnc(_)
+      | Op::Cnc(_)
+      | Op::Jc(_)
+      | Op::Cc(_) => 3,
     }
   }
   fn print(&self) {
@@ -186,6 +198,12 @@ impl Op {
       Op::Aci() => println!("ACI"),
       Op::Rnc() => println!("RNC"),
       Op::Jnc(_) => println!("JNC"),
+      Op::Cnc(_) => println!("CNC"),
+      Op::Sui() => println!("SUI"),
+      Op::Rc() => println!("RC"),
+      Op::Jc(_) => println!("JC"),
+      Op::Cc(_) => println!("CC"),
+      Op::Sbi() => println!("Sbi"),
       Op::Nop => println!("NOP")
     }
   }
@@ -579,6 +597,18 @@ impl Emulator {
       0xce => Ok(Op::Aci()),
       0xd0 => Ok(Op::Rnc()),
       0xd2 => Ok(Op::Jnc(bytes_as_usize)),
+      // CNC
+      0xd4 => Ok(Op::Cnc(bytes_as_usize)),
+      // SUI
+      0xd6 => Ok(Op::Sui()),
+      // RC
+      0xd8 => Ok(Op::Rc()),
+      // JC
+      0xda => Ok(Op::Jc(bytes_as_usize)),
+      // CC
+      0xdc => Ok(Op::Cc(bytes_as_usize)),
+      // SBI
+      0xde => Ok(Op::Sbi()),
       _ => Err(byte)
     }
   }
@@ -917,6 +947,62 @@ impl Emulator {
           should_increment_pc = false
         }
       }
+      Op::Cnc(val) => {
+        if self.state.flags.cy == 0 {
+          let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+          self.state.memory[self.state.sp - 1] = return_address[0];
+          self.state.memory[self.state.sp - 2] = return_address[1];
+          self.state.sp -= 2;
+          self.state.pc = *val;
+          should_increment_pc = false;
+        }
+      }
+      Op::Sui() => {
+        let (answer, overflowed) = self.state.a.overflowing_sub(self.state.memory[self.state.pc + 1]);
+        self.set_flags(answer);
+        self.state.flags.cy = if overflowed {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer;
+        self.state.pc += 1;
+      }
+      Op::Rc() => {
+        if self.state.flags.cy == 1 {
+          self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
+          self.state.sp += 2;
+          should_increment_pc = false
+        }
+      }
+      Op::Jc(val) => {
+        if self.state.flags.cy == 1 {
+          self.state.pc = *val;
+          should_increment_pc = false
+        }
+      }
+      Op::Cc(val) => {
+        if self.state.flags.cy == 1 {
+          let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+          self.state.memory[self.state.sp - 1] = return_address[0];
+          self.state.memory[self.state.sp - 2] = return_address[1];
+          self.state.sp -= 2;
+          self.state.pc = *val;
+          should_increment_pc = false
+        }
+      }
+      Op::Sbi() => {
+        let (mut answer, overflowed) = self.state.a.overflowing_sub(self.state.memory[self.state.pc + 1]);
+        answer -= self.state.flags.cy;
+        self.set_flags(answer);
+        self.state.flags.cy = if overflowed {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer;
+        self.state.pc += 1;
+      }
     };
     if should_increment_pc {
       self.state.pc += &op_code.get_size();
@@ -941,67 +1027,6 @@ impl Emulator {
         0xd3 => {
           println!("SPECIAL");
           // TODO ???
-          self.state.pc += 1;
-        }
-        0xd4 => {
-          println!("CNC adr");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.cy == 0 {
-            let return_address = ((self.state.pc) as u16).to_le_bytes();
-            self.state.memory[self.state.sp - 1] = return_address[0];
-            self.state.memory[self.state.sp - 2] = return_address[1];
-            self.state.sp -= 2;
-            self.state.pc = address;
-          }
-        }
-        0xd6 => {
-          println!("SUI D8");
-          let (answer, overflowed) = self.state.a.overflowing_sub(self.state.memory[self.state.pc]);
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
-          self.state.pc += 1;
-        }
-        0xd8 => {
-          println!("RC");
-          if self.state.flags.cy == 1 {
-            self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
-            self.state.sp += 2; 
-          }
-        }
-        0xda => {
-          println!("JC");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.cy == 1 {
-            self.state.pc = address;
-          }
-        }
-        0xdc => {
-          println!("CC ADDR");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.cy == 1 {
-            let return_address = ((self.state.pc) as u16).to_le_bytes();
-            self.state.memory[self.state.sp - 1] = return_address[0];
-            self.state.memory[self.state.sp - 2] = return_address[1];
-            self.state.sp -= 2;
-            self.state.pc = address;
-          }
-        }
-        0xde => {
-          println!("SBI D8");
-          let (mut answer, overflowed) = self.state.a.overflowing_sub(self.state.memory[self.state.pc]);
-          answer -= self.state.flags.cy;
-          self.set_flags(answer);
-          self.state.flags.cy = if overflowed {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer;
           self.state.pc += 1;
         }
         0xe0 => {
