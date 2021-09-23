@@ -83,7 +83,12 @@ enum Op {
   Rc(),
   Jc(usize),
   Cc(usize),
-  Sbi()
+  Sbi(),
+  Rpo(),
+  Jpo(usize),
+  Xthl(),
+  Cpo(usize),
+  Ani(u8)
 }
 
 impl Op {
@@ -126,9 +131,12 @@ impl Op {
       | Op::Rnc()
       | Op::Sui()
       | Op::Rc()
-      | Op::Sbi() => 1,
+      | Op::Sbi()
+      | Op::Rpo()
+      | Op::Xthl() => 1,
 
-      Op::Mvi(_, _)  => 2,
+      Op::Mvi(_, _)
+      | Op::Ani(_)  => 2,
       
       Op::Lxi(_, _, _, _) 
       | Op::LxiSp(_, _)
@@ -145,7 +153,9 @@ impl Op {
       | Op::Jnc(_)
       | Op::Cnc(_)
       | Op::Jc(_)
-      | Op::Cc(_) => 3,
+      | Op::Cc(_)
+      | Op::Jpo(_)
+      | Op::Cpo(_) => 3,
     }
   }
   fn print(&self) {
@@ -203,7 +213,12 @@ impl Op {
       Op::Rc() => println!("RC"),
       Op::Jc(_) => println!("JC"),
       Op::Cc(_) => println!("CC"),
-      Op::Sbi() => println!("Sbi"),
+      Op::Sbi() => println!("SBI"),
+      Op::Rpo() => println!("RPO"),
+      Op::Jpo(_) => println!("JPO"),
+      Op::Xthl() => println!("XTHL"),
+      Op::Cpo(_) => println!("CPO"),
+      Op::Ani(_) => println!("ANI"),
       Op::Nop => println!("NOP")
     }
   }
@@ -609,6 +624,16 @@ impl Emulator {
       0xdc => Ok(Op::Cc(bytes_as_usize)),
       // SBI
       0xde => Ok(Op::Sbi()),
+      // RPO
+      0xe0 => Ok(Op::Rpo()),
+      // JPO
+      0xe2 => Ok(Op::Jpo(bytes_as_usize)),
+      // XTHML
+      0xe3 => Ok(Op::Xthl()),
+      // CPO
+      0xe4 => Ok(Op::Cpo(bytes_as_usize)),
+      // ANI
+      0xe6 => Ok(Op::Ani(byte2)),
       _ => Err(byte)
     }
   }
@@ -1003,6 +1028,43 @@ impl Emulator {
         self.state.a = answer;
         self.state.pc += 1;
       }
+      Op::Rpo() => {
+        if self.state.flags.p == 0 {
+          self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
+          self.state.sp += 2; 
+          should_increment_pc = false;
+        }
+      }
+      Op::Jpo(val) => {
+        if self.state.flags.p == 0 {
+          self.state.pc = *val;
+          should_increment_pc = false;
+        }
+      }
+      Op::Xthl() => {
+        std::mem::swap(&mut self.state.l, &mut self.state.memory[self.state.sp]);
+        std::mem::swap(&mut self.state.h, &mut self.state.memory[self.state.sp + 1]);
+      }
+      Op::Cpo(val) => {
+        if self.state.flags.p == 0 {
+          let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+          self.state.memory[self.state.sp - 1] = return_address[0];
+          self.state.memory[self.state.sp - 2] = return_address[1];
+          self.state.sp -= 2;
+          self.state.pc = *val;
+          should_increment_pc = false;
+        }
+      }
+      Op::Ani(val) => {
+        let answer = self.state.a & *val;
+        self.set_flags(answer);  
+        self.state.flags.cy = if self.state.a < (answer as u8) {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer as u8;
+      }
     };
     if should_increment_pc {
       self.state.pc += &op_code.get_size();
@@ -1027,48 +1089,6 @@ impl Emulator {
         0xd3 => {
           println!("SPECIAL");
           // TODO ???
-          self.state.pc += 1;
-        }
-        0xe0 => {
-          println!("RPO");
-          if self.state.flags.p == 0 {
-            self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
-            self.state.sp += 2; 
-          }
-        }
-        0xe2 => {
-          println!("JPO adr");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.p == 0 {
-            self.state.pc = address;
-          }
-        }
-        0xe3 => {
-          println!("XTHL");
-          std::mem::swap(&mut self.state.l, &mut self.state.memory[self.state.sp]);
-          std::mem::swap(&mut self.state.h, &mut self.state.memory[self.state.sp + 1]);
-        }
-        0xe4 => {
-          println!("CPO ADDR");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.p == 0 {
-            let return_address = ((self.state.pc) as u16).to_le_bytes();
-            self.state.memory[self.state.sp - 1] = return_address[0];
-            self.state.memory[self.state.sp - 2] = return_address[1];
-            self.state.sp -= 2;
-            self.state.pc = address;
-          }
-        }
-        0xe6 => {
-          println!("ANI D8");
-          let answer = self.state.a & self.state.memory[self.state.pc];
-          self.set_flags(answer);  
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
           self.state.pc += 1;
         }
         0xe8 => {
