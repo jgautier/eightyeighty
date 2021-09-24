@@ -88,7 +88,11 @@ enum Op {
   Jpo(usize),
   Xthl(),
   Cpo(usize),
-  Ani(u8)
+  Ani(u8),
+  Rpe(),
+  Pchl(),
+  Jpe(usize),
+  Xchg()
 }
 
 impl Op {
@@ -133,7 +137,10 @@ impl Op {
       | Op::Rc()
       | Op::Sbi()
       | Op::Rpo()
-      | Op::Xthl() => 1,
+      | Op::Xthl()
+      | Op::Rpe()
+      | Op::Pchl()
+      | Op::Xchg() => 1,
 
       Op::Mvi(_, _)
       | Op::Ani(_)  => 2,
@@ -155,7 +162,8 @@ impl Op {
       | Op::Jc(_)
       | Op::Cc(_)
       | Op::Jpo(_)
-      | Op::Cpo(_) => 3,
+      | Op::Cpo(_)
+      | Op::Jpe(_) => 3,
     }
   }
   fn print(&self) {
@@ -219,6 +227,10 @@ impl Op {
       Op::Xthl() => println!("XTHL"),
       Op::Cpo(_) => println!("CPO"),
       Op::Ani(_) => println!("ANI"),
+      Op::Rpe() => println!("RPE"),
+      Op::Pchl() => println!("PCHL"),
+      Op::Jpe(_) => println!("JPE"),
+      Op::Xchg() => println!("XCHG"),
       Op::Nop => println!("NOP")
     }
   }
@@ -634,6 +646,14 @@ impl Emulator {
       0xe4 => Ok(Op::Cpo(bytes_as_usize)),
       // ANI
       0xe6 => Ok(Op::Ani(byte2)),
+      // RPE
+      0xe8 => Ok(Op::Rpe()),
+      // PCHL
+      0xe9 => Ok(Op::Pchl()),
+      // JPE
+      0xea => Ok(Op::Jpe(bytes_as_usize)),
+      // XCHG
+      0xeb => Ok(Op::Xchg()),
       _ => Err(byte)
     }
   }
@@ -1065,6 +1085,31 @@ impl Emulator {
         };
         self.state.a = answer as u8;
       }
+      Op::Rpe() => {
+        if self.state.flags.p == 1 {
+          self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
+          self.state.sp += 2; 
+          should_increment_pc = false;
+        }
+      }
+      Op::Pchl() => {
+        self.state.pc = self.state.get_register_16(&Register::Hl) as usize;
+        should_increment_pc = false;
+      }
+      Op::Jpe(val) => {
+        if self.state.flags.p == 1 {
+          self.state.pc = *val;
+          should_increment_pc = false
+        }
+      }
+      Op::Xchg() => {
+        let tmp = self.state.h;
+        self.state.h = self.state.d;
+        self.state.d = tmp;
+        let tmp = self.state.l;
+        self.state.l = self.state.e;
+        self.state.e = tmp;
+      }
     };
     if should_increment_pc {
       self.state.pc += &op_code.get_size();
@@ -1090,33 +1135,6 @@ impl Emulator {
           println!("SPECIAL");
           // TODO ???
           self.state.pc += 1;
-        }
-        0xe8 => {
-          println!("RPE");
-          if self.state.flags.p == 1 {
-            self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
-            self.state.sp += 2; 
-          }
-        }
-        0xe9 => {
-          println!("PCHL");
-          self.state.pc = self.get_hl() as usize;
-        }
-        0xea => {
-          println!("JPE");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.p == 1 {
-            self.state.pc = address;
-          }
-        }
-        0xeb => {
-          println!("XCHG");
-          let tmp = self.state.h;
-          self.state.h = self.state.d;
-          self.state.d = tmp;
-          let tmp = self.state.l;
-          self.state.l = self.state.e;
-          self.state.e = tmp;
         }
         0xec => {
           let address = self.get_next_2_bytes_as_usize();
