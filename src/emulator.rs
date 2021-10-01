@@ -92,7 +92,10 @@ enum Op {
   Rpe(),
   Pchl(),
   Jpe(usize),
-  Xchg()
+  Xchg(),
+  Cpe(usize),
+  Xri(),
+  Rp()
 }
 
 impl Op {
@@ -140,10 +143,12 @@ impl Op {
       | Op::Xthl()
       | Op::Rpe()
       | Op::Pchl()
-      | Op::Xchg() => 1,
+      | Op::Xchg()
+      | Op::Rp() => 1,
 
       Op::Mvi(_, _)
-      | Op::Ani(_)  => 2,
+      | Op::Ani(_)
+      | Op::Xri()  => 2,
       
       Op::Lxi(_, _, _, _) 
       | Op::LxiSp(_, _)
@@ -163,7 +168,8 @@ impl Op {
       | Op::Cc(_)
       | Op::Jpo(_)
       | Op::Cpo(_)
-      | Op::Jpe(_) => 3,
+      | Op::Jpe(_)
+      | Op::Cpe(_)  => 3,
     }
   }
   fn print(&self) {
@@ -231,6 +237,9 @@ impl Op {
       Op::Pchl() => println!("PCHL"),
       Op::Jpe(_) => println!("JPE"),
       Op::Xchg() => println!("XCHG"),
+      Op::Cpe(_) => println!("CPE"),
+      Op::Xri() => println!("XRI"),
+      Op::Rp() => println!("RP"),
       Op::Nop => println!("NOP")
     }
   }
@@ -654,6 +663,12 @@ impl Emulator {
       0xea => Ok(Op::Jpe(bytes_as_usize)),
       // XCHG
       0xeb => Ok(Op::Xchg()),
+      // CPE
+      0xec => Ok(Op::Cpe(bytes_as_usize)),
+      // XRI
+      0xee => Ok(Op::Xri()),
+      // RP
+      0xf0 => Ok(Op::Rp()),
       _ => Err(byte)
     }
   }
@@ -1110,6 +1125,33 @@ impl Emulator {
         self.state.l = self.state.e;
         self.state.e = tmp;
       }
+      Op::Cpe(val) => {
+        if self.state.flags.p == 1 {
+          let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+          self.state.memory[self.state.sp - 1] = return_address[0];
+          self.state.memory[self.state.sp - 2] = return_address[1];
+          self.state.sp -= 2;
+          self.state.pc = *val;
+          should_increment_pc = false
+        }
+      }
+      Op::Xri() => {
+        let answer = self.state.a ^ self.state.memory[self.state.pc + 1];
+        self.set_flags(answer);  
+        self.state.flags.cy = if self.state.a < (answer as u8) {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer as u8;
+      },
+      Op::Rp() => {
+        if self.state.flags.s == 0 {
+          self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
+          self.state.sp += 2; 
+          should_increment_pc = false;
+        }
+      }
     };
     if should_increment_pc {
       self.state.pc += &op_code.get_size();
@@ -1135,36 +1177,6 @@ impl Emulator {
           println!("SPECIAL");
           // TODO ???
           self.state.pc += 1;
-        }
-        0xec => {
-          let address = self.get_next_2_bytes_as_usize();
-          println!("CPE adr {:x}", address);
-          if self.state.flags.p == 1 {
-            let return_address = ((self.state.pc) as u16).to_le_bytes();
-            self.state.memory[self.state.sp - 1] = return_address[0];
-            self.state.memory[self.state.sp - 2] = return_address[1];
-            self.state.sp -= 2;
-            self.state.pc = address;
-          }
-        }
-        0xee => {
-          println!("XRI D8");
-          let answer = self.state.a ^ self.state.memory[self.state.pc];
-          self.set_flags(answer);  
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-          self.state.pc += 1;
-        }
-        0xf0 => {
-          println!("RP");
-          if self.state.flags.s == 0 {
-            self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
-            self.state.sp += 2; 
-          }
         }
         0xf1 => {
           println!("POP PSW");
