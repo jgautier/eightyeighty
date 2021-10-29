@@ -95,7 +95,19 @@ enum Op {
   Xchg(),
   Cpe(usize),
   Xri(),
-  Rp()
+  Rp(),
+  Out(),
+  PopPsw(),
+  Jp(usize),
+  Cp(usize),
+  PushPsw(),
+  Ori(),
+  Rm(),
+  Sphl(),
+  Jm(usize),
+  Ei(),
+  Cm(usize),
+  Cpi(u8)
 }
 
 impl Op {
@@ -144,11 +156,19 @@ impl Op {
       | Op::Rpe()
       | Op::Pchl()
       | Op::Xchg()
-      | Op::Rp() => 1,
+      | Op::Rp()
+      | Op::Out()
+      | Op::PopPsw()
+      | Op::PushPsw()
+      | Op::Rm()
+      | Op::Sphl()
+      | Op::Ei() => 1,
 
       Op::Mvi(_, _)
       | Op::Ani(_)
-      | Op::Xri()  => 2,
+      | Op::Xri() 
+      | Op::Ori()
+      | Op::Cpi(_) => 2,
       
       Op::Lxi(_, _, _, _) 
       | Op::LxiSp(_, _)
@@ -169,7 +189,11 @@ impl Op {
       | Op::Jpo(_)
       | Op::Cpo(_)
       | Op::Jpe(_)
-      | Op::Cpe(_)  => 3,
+      | Op::Cpe(_)
+      | Op::Jp(_)
+      | Op::Cp(_)
+      | Op::Jm(_)
+      | Op::Cm(_)  => 3,
     }
   }
   fn print(&self) {
@@ -240,6 +264,18 @@ impl Op {
       Op::Cpe(_) => println!("CPE"),
       Op::Xri() => println!("XRI"),
       Op::Rp() => println!("RP"),
+      Op::Out() => println!("OUT"),
+      Op::PopPsw() => println!("POP PSW"),
+      Op::Jp(_) => println!("JP"),
+      Op::Cp(_) => println!("CP"),
+      Op::PushPsw() => println!("PUSH PSW"),
+      Op::Ori() => println!("ORI"),
+      Op::Rm() => println!("Rm"),
+      Op::Sphl() => println!("Sphl"),
+      Op::Jm(_) => println!("Jm"),
+      Op::Ei() => println!("EI"),
+      Op::Cm(_) => println!("CM"),
+      Op::Cpi(_) => println!("CPI"),
       Op::Nop => println!("NOP")
     }
   }
@@ -669,6 +705,30 @@ impl Emulator {
       0xee => Ok(Op::Xri()),
       // RP
       0xf0 => Ok(Op::Rp()),
+      // OUT unused
+      0xd3 => Ok(Op::Out()),
+      // POP PSW
+      0xf1 => Ok(Op::PopPsw()),
+      // JP 
+      0xf2 => Ok(Op::Jp(bytes_as_usize)),
+      // CP
+      0xf4 => Ok(Op::Cp(bytes_as_usize)),
+      // PUSH PSW
+      0xf5 => Ok(Op::PushPsw()),
+      // ORI
+      0xf6 => Ok(Op::Ori()),
+      // RM
+      0xf8 => Ok(Op::Rm()),
+      // SPHL
+      0xf9 => Ok(Op::Sphl()),
+      // JM
+      0xfa => Ok(Op::Jm(bytes_as_usize)),
+      // EI
+      0xfb => Ok(Op::Ei()),
+      // CM
+      0xfc => Ok(Op::Cm(bytes_as_usize)),
+      // CPI
+      0xfe => Ok(Op::Cpi(byte2)),
       _ => Err(byte)
     }
   }
@@ -967,7 +1027,7 @@ impl Emulator {
       Op::Call(val) => {
         let address = *val;
         if address == 5 && self.state.c == 9 {
-            let mut offset = (self.get_de() + 3) as usize;
+            let mut offset = (self.state.get_register_16(&Register::De) + 3) as usize;
             while self.state.memory[offset] != 36 {
               print!("{}", self.state.memory[offset] as char);
               offset += 1;
@@ -1144,13 +1204,121 @@ impl Emulator {
           0
         };
         self.state.a = answer as u8;
-      },
+      }
       Op::Rp() => {
         if self.state.flags.s == 0 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
           self.state.sp += 2; 
           should_increment_pc = false;
         }
+      }
+      Op::Out() => {
+        // NOOP for now
+      }
+      Op::PopPsw() => {
+        let flags = self.state.memory[self.state.sp];
+        self.state.a = self.state.memory[self.state.sp + 1];
+        self.state.flags.cy = flags & 1;
+        self.state.flags.p = if (flags & (1 << 2)) > 0 {
+          1
+        } else {
+          0
+        };
+
+        self.state.flags.ac = if (flags & (1 << 4)) > 0 {
+          1
+        } else {
+          0
+        };
+
+        self.state.flags.z = if (flags & (1 << 6)) > 0 {
+          1
+        } else {
+          0
+        };
+
+        self.state.flags.s = if (flags & (1 << 7)) > 0 {
+          1
+        } else {
+          0
+        };
+        self.state.sp += 2;
+      }
+      Op::Jp(val) => {
+        if self.state.flags.s == 0 {
+          self.state.pc = *val;
+          should_increment_pc = false
+        }
+      }
+      Op::Cp(val) => {
+        if self.state.flags.s == 0 {
+          let return_address = ((self.state.pc + 2) as u16).to_le_bytes();
+          self.state.memory[self.state.sp - 1] = return_address[0];
+          self.state.memory[self.state.sp - 2] = return_address[1];
+          self.state.sp -= 2;
+          self.state.pc = *val;
+          should_increment_pc = false
+        }
+      }
+      Op::PushPsw() => {
+        let mut flags = 0;
+        flags |= self.state.flags.cy;
+        flags |= 1 << 1;
+        flags |= self.state.flags.p << 2;
+        flags |= self.state.flags.ac << 4;
+        flags |= self.state.flags.z << 6;
+        flags |= self.state.flags.s << 7;
+        self.state.memory[self.state.sp - 2] = flags;
+        self.state.memory[self.state.sp - 1] = self.state.a;
+        self.state.sp -= 2;
+      }
+      Op::Ori() => {
+        let answer = self.state.a | self.state.memory[self.state.pc + 1];
+        self.set_flags(answer);  
+        self.state.flags.cy = if self.state.a < (answer as u8) {
+          1
+        } else {
+          0
+        };
+        self.state.a = answer as u8;
+      }
+      Op::Rm() => {
+        if self.state.flags.s == 1 {
+          self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
+          self.state.sp += 2; 
+          should_increment_pc = false;
+        }
+      }
+      Op::Sphl() => {
+        self.state.sp = self.state.get_register_16(&Register::Hl) as usize;
+      }
+      Op::Jm(val) => {
+        if self.state.flags.s == 1 {
+          self.state.pc = *val;
+          should_increment_pc = false;
+        }
+      }
+      Op::Ei() => {
+        //TODO
+      }
+      Op::Cm(val) => {
+        if self.state.flags.s == 1 {
+          let return_address = ((self.state.pc + 2) as u16).to_le_bytes();
+          self.state.memory[self.state.sp - 1] = return_address[0];
+          self.state.memory[self.state.sp - 2] = return_address[1];
+          self.state.sp -= 2;
+          self.state.pc = *val;
+          should_increment_pc = false
+        }
+      }
+      Op::Cpi(val) => {
+        let (answer, _) = self.state.a.overflowing_sub(*val);
+        self.set_flags(answer);
+        self.state.flags.cy = if self.state.a < *val {
+          1
+        } else {
+          0
+        };
       }
     };
     if should_increment_pc {
@@ -1167,170 +1335,12 @@ impl Emulator {
         Ok(op) => {
           self.execute_op(op);
           print_debug_info(&self.state, n);
-          continue
         },
-        Err(_) => println!("Unhandled op falling back")
-      };
-      let op = self.get_current_op();
-      match op {
-        0xd3 => {
-          println!("SPECIAL");
-          // TODO ???
-          self.state.pc += 1;
-        }
-        0xf1 => {
-          println!("POP PSW");
-          let flags = self.state.memory[self.state.sp];
-          self.state.a = self.state.memory[self.state.sp + 1];
-          self.state.flags.cy = flags & 1;
-          self.state.flags.p = if (flags & (1 << 2)) > 0 {
-            1
-          } else {
-            0
-          };
-  
-          self.state.flags.ac = if (flags & (1 << 4)) > 0 {
-            1
-          } else {
-            0
-          };
-  
-          self.state.flags.z = if (flags & (1 << 6)) > 0 {
-            1
-          } else {
-            0
-          };
-  
-          self.state.flags.s = if (flags & (1 << 7)) > 0 {
-            1
-          } else {
-            0
-          };
-          self.state.sp += 2;
-        }
-        0xf2 => {
-          println!("JP");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.s == 0 {
-            self.state.pc = address;
-          }
-        }
-        0xf4 => {
-          println!("CP adr");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.s == 0 {
-            let return_address = ((self.state.pc) as u16).to_le_bytes();
-            self.state.memory[self.state.sp - 1] = return_address[0];
-            self.state.memory[self.state.sp - 2] = return_address[1];
-            self.state.sp -= 2;
-            self.state.pc = address;
-          }
-        }
-        0xf5 => {
-          println!("PUSH PSW");
-          let mut flags = 0;
-          flags |= self.state.flags.cy;
-          flags |= 1 << 1;
-          flags |= self.state.flags.p << 2;
-          flags |= self.state.flags.ac << 4;
-          flags |= self.state.flags.z << 6;
-          flags |= self.state.flags.s << 7;
-          self.state.memory[self.state.sp - 2] = flags;
-          self.state.memory[self.state.sp - 1] = self.state.a;
-          self.state.sp -= 2;
-        }
-        0xf6 => {
-          println!("ORI D8");
-          let answer = self.state.a | self.state.memory[self.state.pc];
-          self.set_flags(answer);  
-          self.state.flags.cy = if self.state.a < (answer as u8) {
-            1
-          } else {
-            0
-          };
-          self.state.a = answer as u8;
-          self.state.pc += 1;
-        }
-        0xf8 => {
-          println!("RM");
-          if self.state.flags.s == 1 {
-            self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
-            self.state.sp += 2; 
-          }
-        }
-        0xf9 => {
-          println!("SPHL");
-          self.state.sp = self.get_hl() as usize;
-        }
-        0xfa => {
-          println!("JM");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.s == 1 {
-            self.state.pc = address;
-          }
-        }
-        0xfb => {
-          println!("EI");
-          // TODO special??
-        }
-        0xfc => {
-          println!("CM ADDR");
-          let address = self.get_next_2_bytes_as_usize();
-          if self.state.flags.s == 1 {
-            let return_address = ((self.state.pc) as u16).to_le_bytes();
-            self.state.memory[self.state.sp - 1] = return_address[0];
-            self.state.memory[self.state.sp - 2] = return_address[1];
-            self.state.sp -= 2;
-            self.state.pc = address;
-          }
-        }
-        0xfe => {
-          println!("CPI D8");
-          let (answer, _) = self.state.a.overflowing_sub(self.state.memory[self.state.pc]);
-          self.set_flags(answer);
-          self.state.flags.cy = if self.state.a < self.state.memory[self.state.pc] {
-            1
-          } else {
-            0
-          };
-  
-          self.state.pc += 1;
-        }
-        _ => {
+        Err(op) => {
           panic!("unhandled op {:x}", op);
-        } 
-      }
-      print_debug_info(&self.state, n);
+        }
+      };
     }
-  }
-
-  fn get_next_2_bytes_as_usize(&mut self) -> usize {
-    let val = u16::from_le_bytes([self.state.memory[self.state.pc], self.state.memory[self.state.pc + 1]]) as usize;
-    self.state.pc += 2;
-    val
-  }
-
-  fn get_memory_at_hl(&self) -> u8 {
-    self.state.memory[self.get_hl() as usize]
-  }
-  fn get_memory_at_de(&self) -> u8 {
-    self.state.memory[self.get_de() as usize]
-  }
-
-  fn get_memory_at_bc(&self) -> u8 {
-    self.state.memory[self.get_bc() as usize]
-  }
-
-  fn get_de(&self) -> u16 {
-    u16::from_le_bytes([self.state.e, self.state.d])
-  }
-
-  fn get_hl(&self) -> u16 {
-    u16::from_le_bytes([self.state.l, self.state.h])
-  }
-
-  fn get_bc(&self) -> u16 {
-    u16::from_le_bytes([self.state.c, self.state.b])
   }
 
   fn set_flags(&mut self, val: u8) {
@@ -1347,12 +1357,6 @@ impl Emulator {
     };
 
     self.state.flags.p = parity(val as u8);
-  }
-  fn get_current_op(&mut self) -> u8 {
-    let op = self.state.memory[self.state.pc];
-    println!("{:x} op", op);
-    self.state.pc += 1;
-    op
   }
 }
 
