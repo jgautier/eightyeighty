@@ -69,21 +69,21 @@ enum Op {
   Jnz(usize),
   Jmp(usize),
   Cnz(usize),
-  Adi(),
+  Adi(u8),
   Rz(),
   Ret(),
   Jz(usize),
   Cz(usize),
   Call(usize),
-  Aci(),
+  Aci(u8),
   Rnc(),
   Jnc(usize),
   Cnc(usize),
-  Sui(),
+  Sui(u8),
   Rc(),
   Jc(usize),
   Cc(usize),
-  Sbi(),
+  Sbi(u8),
   Rpo(),
   Jpo(usize),
   Xthl(),
@@ -94,20 +94,21 @@ enum Op {
   Jpe(usize),
   Xchg(),
   Cpe(usize),
-  Xri(),
+  Xri(u8),
   Rp(),
   Out(),
   PopPsw(),
   Jp(usize),
   Cp(usize),
   PushPsw(),
-  Ori(),
+  Ori(u8),
   Rm(),
   Sphl(),
   Jm(usize),
   Ei(),
   Cm(usize),
-  Cpi(u8)
+  Cpi(u8),
+  In(u8)
 }
 
 impl Op {
@@ -143,14 +144,10 @@ impl Op {
       | Op::DcxSp()
       | Op::Cmc()
       | Op::Rnz()
-      | Op::Adi()
       | Op::Rz()
       | Op::Ret()
-      | Op::Aci()
       | Op::Rnc()
-      | Op::Sui()
       | Op::Rc()
-      | Op::Sbi()
       | Op::Rpo()
       | Op::Xthl()
       | Op::Rpe()
@@ -166,9 +163,14 @@ impl Op {
 
       Op::Mvi(_, _)
       | Op::Ani(_)
-      | Op::Xri() 
-      | Op::Ori()
-      | Op::Cpi(_) => 2,
+      | Op::Xri(_) 
+      | Op::Ori(_)
+      | Op::Cpi(_)
+      | Op::Aci(_)
+      | Op::Sui(_)
+      | Op::Sbi(_)
+      | Op::In(_)
+      | Op::Adi(_) => 2,
       
       Op::Lxi(_, _, _, _) 
       | Op::LxiSp(_, _)
@@ -237,21 +239,21 @@ impl Op {
       Op::Jnz(_) => println!("JNZ"),
       Op::Jmp(_) => println!("JMP"),
       Op::Cnz(_) => println!("CNZ"),
-      Op::Adi() => println!("ADI"),
+      Op::Adi(_) => println!("ADI"),
       Op::Rz() => println!("RZ"),
       Op::Ret() => println!("RET"),
       Op::Jz(_) => println!("JZ"),
       Op::Cz(_) => println!("CZ"),
       Op::Call(_) => println!("CALL"),
-      Op::Aci() => println!("ACI"),
+      Op::Aci(_) => println!("ACI"),
       Op::Rnc() => println!("RNC"),
       Op::Jnc(_) => println!("JNC"),
       Op::Cnc(_) => println!("CNC"),
-      Op::Sui() => println!("SUI"),
+      Op::Sui(_) => println!("SUI"),
       Op::Rc() => println!("RC"),
       Op::Jc(_) => println!("JC"),
       Op::Cc(_) => println!("CC"),
-      Op::Sbi() => println!("SBI"),
+      Op::Sbi(_) => println!("SBI"),
       Op::Rpo() => println!("RPO"),
       Op::Jpo(_) => println!("JPO"),
       Op::Xthl() => println!("XTHL"),
@@ -262,20 +264,21 @@ impl Op {
       Op::Jpe(_) => println!("JPE"),
       Op::Xchg() => println!("XCHG"),
       Op::Cpe(_) => println!("CPE"),
-      Op::Xri() => println!("XRI"),
+      Op::Xri(_) => println!("XRI"),
       Op::Rp() => println!("RP"),
       Op::Out() => println!("OUT"),
       Op::PopPsw() => println!("POP PSW"),
       Op::Jp(_) => println!("JP"),
       Op::Cp(_) => println!("CP"),
       Op::PushPsw() => println!("PUSH PSW"),
-      Op::Ori() => println!("ORI"),
+      Op::Ori(_) => println!("ORI"),
       Op::Rm() => println!("Rm"),
       Op::Sphl() => println!("Sphl"),
       Op::Jm(_) => println!("Jm"),
       Op::Ei() => println!("EI"),
       Op::Cm(_) => println!("CM"),
       Op::Cpi(_) => println!("CPI"),
+      Op::In(_) => println!("IN"),
       Op::Nop => println!("NOP")
     }
   }
@@ -286,8 +289,7 @@ struct Flags {
   s: u8,
   p: u8,
   cy: u8,
-  ac: u8,
-  pad: [u8; 3]
+  ac: u8
 }
 
 struct State {
@@ -406,8 +408,7 @@ impl Emulator {
         s: 0,
         p: 0,
         cy: 0,
-        ac: 0,
-        pad: [0, 0, 0]
+        ac: 0
       }
     };
     let program_size = bytes.len();
@@ -655,7 +656,7 @@ impl Emulator {
       // CNZ
       0xc4 => Ok(Op::Cnz(bytes_as_usize)),
       // ADI
-      0xc6 => Ok(Op::Adi()),
+      0xc6 => Ok(Op::Adi(byte2)),
       // RZ
       0xc8 => Ok(Op::Rz()),
       // RET
@@ -666,13 +667,13 @@ impl Emulator {
       0xcc => Ok(Op::Cz(bytes_as_usize)),
       // CALL
       0xcd => Ok(Op::Call(bytes_as_usize)),
-      0xce => Ok(Op::Aci()),
+      0xce => Ok(Op::Aci(byte2)),
       0xd0 => Ok(Op::Rnc()),
       0xd2 => Ok(Op::Jnc(bytes_as_usize)),
       // CNC
       0xd4 => Ok(Op::Cnc(bytes_as_usize)),
       // SUI
-      0xd6 => Ok(Op::Sui()),
+      0xd6 => Ok(Op::Sui(byte2)),
       // RC
       0xd8 => Ok(Op::Rc()),
       // JC
@@ -680,7 +681,7 @@ impl Emulator {
       // CC
       0xdc => Ok(Op::Cc(bytes_as_usize)),
       // SBI
-      0xde => Ok(Op::Sbi()),
+      0xde => Ok(Op::Sbi(byte2)),
       // RPO
       0xe0 => Ok(Op::Rpo()),
       // JPO
@@ -702,7 +703,7 @@ impl Emulator {
       // CPE
       0xec => Ok(Op::Cpe(bytes_as_usize)),
       // XRI
-      0xee => Ok(Op::Xri()),
+      0xee => Ok(Op::Xri(byte2)),
       // RP
       0xf0 => Ok(Op::Rp()),
       // OUT unused
@@ -716,7 +717,7 @@ impl Emulator {
       // PUSH PSW
       0xf5 => Ok(Op::PushPsw()),
       // ORI
-      0xf6 => Ok(Op::Ori()),
+      0xf6 => Ok(Op::Ori(byte2)),
       // RM
       0xf8 => Ok(Op::Rm()),
       // SPHL
@@ -729,13 +730,15 @@ impl Emulator {
       0xfc => Ok(Op::Cm(bytes_as_usize)),
       // CPI
       0xfe => Ok(Op::Cpi(byte2)),
+      // IN
+      0xdb => Ok(Op::In(byte2)),
       _ => Err(byte)
     }
   }
 
   fn execute_op(&mut self, op_code: Op) {
     op_code.print();
-    let mut should_increment_pc = true;
+    self.state.pc += &op_code.get_size();
     match &op_code {
       Op::Nop => {}
       Op::Incr(reg) => {
@@ -955,33 +958,27 @@ impl Emulator {
         if self.state.flags.z == 0 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
           self.state.sp += 2; 
-          should_increment_pc = false;
         }
       }
       Op::Jnz(val) => {
         if self.state.flags.z == 0 {
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
       Op::Jmp(val) => {
         self.state.pc = *val;
-        should_increment_pc = false
       }
       Op::Cnz(val) => {
         if self.state.flags.z == 0 {
-          // the pc hasn't been incremented yet so need to manually increment to get the correct return address
-          let return_address = ((self.state.pc + 2) as u16).to_le_bytes();
+          let return_address = ((self.state.pc) as u16).to_le_bytes();
           self.state.memory[self.state.sp - 1] = return_address[0];
           self.state.memory[self.state.sp - 2] = return_address[1];
           self.state.sp -= 2;
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
-      Op::Adi() => {
-          // the pc hasn't been incremented yet so need to manually increment to get the correct value
-        let (answer, overflowed) = self.state.a.overflowing_add(self.state.memory[self.state.pc + 1]);
+      Op::Adi(val) => {
+        let (answer, overflowed) = self.state.a.overflowing_add(*val);
         self.set_flags(answer);
         self.state.flags.cy = if overflowed {
           1
@@ -990,7 +987,6 @@ impl Emulator {
         };
 
         self.state.a = answer as u8;
-        self.state.pc += 1;
       }
       Op::Rz() => {
         if self.state.flags.z == 1 {
@@ -998,30 +994,24 @@ impl Emulator {
           let high = self.state.memory[self.state.sp];
           self.state.pc = (((high as u16) << 8) + low as u16) as usize;
           self.state.sp += 2; 
-          should_increment_pc = false
         }
       }
       Op::Ret() => {
         self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
         self.state.sp += 2;
-        should_increment_pc = false
       }
       Op::Jz(val) => {
         if self.state.flags.z == 1 {
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
       Op::Cz(val) => {
-        println!("CZ adr");
         if self.state.flags.z == 1 {
-          // the pc hasn't been incremented yet so increment it manually
-          let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+          let return_address = ((self.state.pc) as u16).to_le_bytes();
           self.state.memory[self.state.sp - 1] = return_address[0];
           self.state.memory[self.state.sp - 2] = return_address[1];
           self.state.sp -= 2;
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
       Op::Call(val) => {
@@ -1035,16 +1025,14 @@ impl Emulator {
             println!();
             std::process::exit(0);
         }
-        // pc hasn't been incremented yet
-        let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+        let return_address = ((self.state.pc) as u16).to_le_bytes();
         self.state.memory[self.state.sp - 1] = return_address[0];
         self.state.memory[self.state.sp - 2] = return_address[1];
         self.state.sp -= 2;
         self.state.pc = address;
-        should_increment_pc = false
       }
-      Op::Aci() => {
-        let (answer, overflowed) = self.state.a.overflowing_add(self.state.memory[self.state.pc + 1] + self.state.flags.cy);
+      Op::Aci(val) => {
+        let (answer, overflowed) = self.state.a.overflowing_add(*val + self.state.flags.cy);
         self.set_flags(answer);
         self.state.flags.cy = if overflowed {
           1
@@ -1052,33 +1040,29 @@ impl Emulator {
           0
         };
         self.state.a = answer;
-        self.state.pc += 1;
       },
       Op::Rnc() => {
         if self.state.flags.cy == 0 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
           self.state.sp += 2; 
-          should_increment_pc = false
         }
       }
       Op::Jnc(val) => {
         if self.state.flags.cy == 0 {
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
       Op::Cnc(val) => {
         if self.state.flags.cy == 0 {
-          let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+          let return_address = ((self.state.pc) as u16).to_le_bytes();
           self.state.memory[self.state.sp - 1] = return_address[0];
           self.state.memory[self.state.sp - 2] = return_address[1];
           self.state.sp -= 2;
           self.state.pc = *val;
-          should_increment_pc = false;
         }
       }
-      Op::Sui() => {
-        let (answer, overflowed) = self.state.a.overflowing_sub(self.state.memory[self.state.pc + 1]);
+      Op::Sui(val) => {
+        let (answer, overflowed) = self.state.a.overflowing_sub(*val);
         self.set_flags(answer);
         self.state.flags.cy = if overflowed {
           1
@@ -1086,33 +1070,29 @@ impl Emulator {
           0
         };
         self.state.a = answer;
-        self.state.pc += 1;
       }
       Op::Rc() => {
         if self.state.flags.cy == 1 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
           self.state.sp += 2;
-          should_increment_pc = false
         }
       }
       Op::Jc(val) => {
         if self.state.flags.cy == 1 {
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
       Op::Cc(val) => {
         if self.state.flags.cy == 1 {
-          let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+          let return_address = (self.state.pc as u16).to_le_bytes();
           self.state.memory[self.state.sp - 1] = return_address[0];
           self.state.memory[self.state.sp - 2] = return_address[1];
           self.state.sp -= 2;
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
-      Op::Sbi() => {
-        let (mut answer, overflowed) = self.state.a.overflowing_sub(self.state.memory[self.state.pc + 1]);
+      Op::Sbi(val) => {
+        let (mut answer, overflowed) = self.state.a.overflowing_sub(*val);
         answer -= self.state.flags.cy;
         self.set_flags(answer);
         self.state.flags.cy = if overflowed {
@@ -1121,19 +1101,16 @@ impl Emulator {
           0
         };
         self.state.a = answer;
-        self.state.pc += 1;
       }
       Op::Rpo() => {
         if self.state.flags.p == 0 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
           self.state.sp += 2; 
-          should_increment_pc = false;
         }
       }
       Op::Jpo(val) => {
         if self.state.flags.p == 0 {
           self.state.pc = *val;
-          should_increment_pc = false;
         }
       }
       Op::Xthl() => {
@@ -1142,12 +1119,11 @@ impl Emulator {
       }
       Op::Cpo(val) => {
         if self.state.flags.p == 0 {
-          let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+          let return_address = (self.state.pc as u16).to_le_bytes();
           self.state.memory[self.state.sp - 1] = return_address[0];
           self.state.memory[self.state.sp - 2] = return_address[1];
           self.state.sp -= 2;
           self.state.pc = *val;
-          should_increment_pc = false;
         }
       }
       Op::Ani(val) => {
@@ -1164,17 +1140,14 @@ impl Emulator {
         if self.state.flags.p == 1 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
           self.state.sp += 2; 
-          should_increment_pc = false;
         }
       }
       Op::Pchl() => {
         self.state.pc = self.state.get_register_16(&Register::Hl) as usize;
-        should_increment_pc = false;
       }
       Op::Jpe(val) => {
         if self.state.flags.p == 1 {
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
       Op::Xchg() => {
@@ -1187,16 +1160,15 @@ impl Emulator {
       }
       Op::Cpe(val) => {
         if self.state.flags.p == 1 {
-          let return_address = ((self.state.pc + 3) as u16).to_le_bytes();
+          let return_address = (self.state.pc as u16).to_le_bytes();
           self.state.memory[self.state.sp - 1] = return_address[0];
           self.state.memory[self.state.sp - 2] = return_address[1];
           self.state.sp -= 2;
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
-      Op::Xri() => {
-        let answer = self.state.a ^ self.state.memory[self.state.pc + 1];
+      Op::Xri(val) => {
+        let answer = self.state.a ^ *val;
         self.set_flags(answer);  
         self.state.flags.cy = if self.state.a < (answer as u8) {
           1
@@ -1209,7 +1181,6 @@ impl Emulator {
         if self.state.flags.s == 0 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
           self.state.sp += 2; 
-          should_increment_pc = false;
         }
       }
       Op::Out() => {
@@ -1247,17 +1218,15 @@ impl Emulator {
       Op::Jp(val) => {
         if self.state.flags.s == 0 {
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
       Op::Cp(val) => {
         if self.state.flags.s == 0 {
-          let return_address = ((self.state.pc + 2) as u16).to_le_bytes();
+          let return_address = (self.state.pc  as u16).to_le_bytes();
           self.state.memory[self.state.sp - 1] = return_address[0];
           self.state.memory[self.state.sp - 2] = return_address[1];
           self.state.sp -= 2;
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
       Op::PushPsw() => {
@@ -1272,8 +1241,8 @@ impl Emulator {
         self.state.memory[self.state.sp - 1] = self.state.a;
         self.state.sp -= 2;
       }
-      Op::Ori() => {
-        let answer = self.state.a | self.state.memory[self.state.pc + 1];
+      Op::Ori(val) => {
+        let answer = self.state.a | *val;
         self.set_flags(answer);  
         self.state.flags.cy = if self.state.a < (answer as u8) {
           1
@@ -1286,7 +1255,6 @@ impl Emulator {
         if self.state.flags.s == 1 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp + 1], self.state.memory[self.state.sp]]) as usize;
           self.state.sp += 2; 
-          should_increment_pc = false;
         }
       }
       Op::Sphl() => {
@@ -1295,7 +1263,6 @@ impl Emulator {
       Op::Jm(val) => {
         if self.state.flags.s == 1 {
           self.state.pc = *val;
-          should_increment_pc = false;
         }
       }
       Op::Ei() => {
@@ -1303,12 +1270,11 @@ impl Emulator {
       }
       Op::Cm(val) => {
         if self.state.flags.s == 1 {
-          let return_address = ((self.state.pc + 2) as u16).to_le_bytes();
+          let return_address = (self.state.pc as u16).to_le_bytes();
           self.state.memory[self.state.sp - 1] = return_address[0];
           self.state.memory[self.state.sp - 2] = return_address[1];
           self.state.sp -= 2;
           self.state.pc = *val;
-          should_increment_pc = false
         }
       }
       Op::Cpi(val) => {
@@ -1320,10 +1286,10 @@ impl Emulator {
           0
         };
       }
+      Op::In(_) => {
+        // NOOP for now
+      }
     };
-    if should_increment_pc {
-      self.state.pc += &op_code.get_size();
-    }
   }
 
   pub fn run(&mut self) {
