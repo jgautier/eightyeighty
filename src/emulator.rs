@@ -1,3 +1,5 @@
+use crate::machine::IO;
+
 enum Register {
   A,
   B,
@@ -96,7 +98,7 @@ enum Op {
   Cpe(usize),
   Xri(u8),
   Rp(),
-  Out(),
+  Out(u8),
   PopPsw(),
   Jp(usize),
   Cp(usize),
@@ -154,7 +156,6 @@ impl Op {
       | Op::Pchl()
       | Op::Xchg()
       | Op::Rp()
-      | Op::Out()
       | Op::PopPsw()
       | Op::PushPsw()
       | Op::Rm()
@@ -170,7 +171,8 @@ impl Op {
       | Op::Sui(_)
       | Op::Sbi(_)
       | Op::In(_)
-      | Op::Adi(_) => 2,
+      | Op::Adi(_)
+      | Op::Out(_) => 2,
       
       Op::Lxi(_, _, _, _) 
       | Op::LxiSp(_, _)
@@ -266,7 +268,7 @@ impl Op {
       Op::Cpe(_) => println!("CPE"),
       Op::Xri(_) => println!("XRI"),
       Op::Rp() => println!("RP"),
-      Op::Out() => println!("OUT"),
+      Op::Out(_) => println!("OUT"),
       Op::PopPsw() => println!("POP PSW"),
       Op::Jp(_) => println!("JP"),
       Op::Cp(_) => println!("CP"),
@@ -387,7 +389,7 @@ impl State {
 
 pub struct Emulator {
   state: State,
-  program_size: usize
+  program_size: usize,
 }
 
 impl Emulator {
@@ -706,8 +708,8 @@ impl Emulator {
       0xee => Ok(Op::Xri(byte2)),
       // RP
       0xf0 => Ok(Op::Rp()),
-      // OUT unused
-      0xd3 => Ok(Op::Out()),
+      // OUT
+      0xd3 => Ok(Op::Out(byte2)),
       // POP PSW
       0xf1 => Ok(Op::PopPsw()),
       // JP 
@@ -736,7 +738,7 @@ impl Emulator {
     }
   }
 
-  fn execute_op(&mut self, op_code: Op) {
+  fn execute_op(&mut self, op_code: Op, io: &mut dyn IO) {
     op_code.print();
     self.state.pc += &op_code.get_size();
     match &op_code {
@@ -1183,8 +1185,8 @@ impl Emulator {
           self.state.sp += 2; 
         }
       }
-      Op::Out() => {
-        // NOOP for now
+      Op::Out(port) => {
+        io.output(*port, self.state.get_register(&Register::A))
       }
       Op::PopPsw() => {
         let flags = self.state.memory[self.state.sp];
@@ -1286,20 +1288,20 @@ impl Emulator {
           0
         };
       }
-      Op::In(_) => {
-        // NOOP for now
+      Op::In(port) => {
+        self.state.set_register(&Register::A, io.input(*port));
       }
     };
   }
 
-  pub fn run(&mut self) {
+  pub fn run(&mut self, io: &mut dyn IO) {
     let mut n = 0;
     while self.state.pc < self.program_size {
       n += 1;
       let op_code = self.read_next_op();
       match op_code {
         Ok(op) => {
-          self.execute_op(op);
+          self.execute_op(op, io);
           print_debug_info(&self.state, n);
         },
         Err(op) => {
@@ -1373,6 +1375,7 @@ fn print_debug_info(state: &State, n: i32) {
 mod test {
   use std::fs;
   use crate::emulator::Emulator;
+  use crate::machine::SpaceInvadersIO;
   #[test]
   fn cpudiag() {
     let result = fs::read("cpudiag.bin");
@@ -1390,8 +1393,9 @@ mod test {
         bytes[0x59d] = 0xc2;
         bytes[0x59e] = 0x05;
         println!("{:x}", bytes[0x0309]);
+        let space_invaders_io = &mut SpaceInvadersIO::new();
         let mut emu = Emulator::new(bytes);
-        emu.run();
+        emu.run(space_invaders_io);
     } else {
         println!("Error reading file {:?}", result);
     }
