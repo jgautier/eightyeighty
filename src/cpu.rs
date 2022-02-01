@@ -1530,7 +1530,6 @@ impl Cpu {
         4
       },
       Op::Daa() => {
-        // noop for now
         let mut a: u16 = self.state.get_register(&Register::A) as u16;
         // least significant bits
         let lsb = a & 0x0f;
