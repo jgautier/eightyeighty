@@ -8,11 +8,12 @@ use std::time::{Instant, Duration};
 use std::thread;
 use sdl2::event::Event;
 use std::convert::TryInto;
+use sdl2::mixer::{Music};
+use std::collections::HashMap;
 
 const GREEN: Color = Color::RGB(0, 255, 0);
 const WHITE: Color = Color::RGB(255, 255, 255);
 const RED: Color = Color::RGB(255, 0, 0);
-
 
 pub trait IO {
     fn input(&self, port: u8) -> u8;
@@ -29,8 +30,9 @@ pub struct SpaceInvaders {
 impl SpaceInvaders {
     pub fn new(bytes: Vec<u8>) -> Self {
         let sdl_context = sdl2::init().unwrap();
+        let speaker = Speaker::new(&sdl_context);
         SpaceInvaders {
-            io: SpaceInvadersIO::new(),
+            io: SpaceInvadersIO::new(speaker),
             cpu: Cpu::new(bytes),
             screen: Screen::new(&sdl_context).unwrap(),
             controller: Box::new(Sdl2KeyboardController::new(sdl_context))
@@ -105,7 +107,7 @@ impl SpaceInvaders {
                     for b in 0..8 {
                         if px & (1 << b) != 0 {
                             let y = 256 - (8 * i + b) as i32;
-                            let color = if y > 175 {
+                            let color = if y > 180 {
                                 GREEN
                             } else if y > 33 && y < 50 {
                                 RED
@@ -126,22 +128,32 @@ impl SpaceInvaders {
     }
 }
 
+pub enum Sound {
+    PlayerShoot
+}
+
 pub struct SpaceInvadersIO {
     // read ports
     port1: u8,
     port2: u8,
     
     shift_register: u16,
-    shift_amount: u8
+    shift_amount: u8,
+    prev_port3_val: u8,
+    prev_port5_val: u8,
+    speaker: Speaker
 }
 
 impl SpaceInvadersIO {
-    pub fn new() -> Self {
+    pub fn new(speaker: Speaker) -> Self {
         Self {
             shift_register: 0,
             shift_amount: 0,
             port1: 0b0000_1000,
-            port2: 0b0000_0000
+            port2: 0b0000_0000,
+            prev_port3_val: 0,
+            prev_port5_val: 0,
+            speaker
         }
     }
 }
@@ -164,7 +176,23 @@ impl IO for SpaceInvadersIO {
                 let [_, val2] = u16::to_le_bytes(self.shift_register);
                 self.shift_register = u16::from_le_bytes([val2, val]);
             },
-            3 | 5 | 6 => {},
+            3 => {
+                if val != self.prev_port3_val {
+                    if val & 0x2 == 2 && self.prev_port3_val & 0x2 == 0 {
+                        self.speaker.play_wave_file("shoot.wav");
+                    }
+                    if val & 0x4 == 4 && self.prev_port3_val & 0x4 == 0 {
+                        self.speaker.play_wave_file("player_dies.wav");
+                    }
+                    if val & 0x8 == 8 && self.prev_port3_val & 0x8 == 0 {
+                        self.speaker.play_wave_file("invader_dies.wav");
+                    }
+                    self.prev_port3_val = val;
+                }
+            },
+            5 => {
+            },
+            6 => {},
             _ => panic!("cannot write to port {}", port)
         }
     }
@@ -287,5 +315,28 @@ impl Screen {
         let scale = 4;
         self.canvas.set_draw_color(color);
         self.canvas.fill_rect(Rect::new(scale * x, scale * y, 4, 4))
+    }
+}
+
+pub struct Speaker {
+    audio: sdl2::AudioSubsystem,
+    sounds: HashMap<String, Music<'static>>
+}
+
+impl Speaker {
+    pub fn new(sdl_context: &sdl2::Sdl) -> Self {
+        sdl2::mixer::open_audio(11025, sdl2::mixer::AUDIO_U8, sdl2::mixer::DEFAULT_CHANNELS, 1_024).unwrap();
+        sdl2::mixer::init(sdl2::mixer::InitFlag::all()).unwrap();
+        sdl2::mixer::allocate_channels(3);
+        Speaker {
+            audio: sdl_context.audio().unwrap(),
+            sounds: HashMap::new()
+        }
+    }
+    fn play_wave_file(&mut self, file_name: &str) {
+        if !self.sounds.contains_key(file_name) {
+            self.sounds.insert(file_name.to_string(), Music::from_file(file_name).unwrap());
+        }
+        self.sounds.get(file_name).unwrap().play(1).unwrap()
     }
 }
