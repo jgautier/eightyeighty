@@ -1681,7 +1681,7 @@ mod test {
   }
   #[test]
   fn cpudiag() {
-    let result = fs::read("cpudiag.bin");
+    let result = fs::read("resources/cpudiag.bin");
     if let Ok(mut bytes) = result {
         for _ in 0..256 {
           bytes.insert(0, 0);
