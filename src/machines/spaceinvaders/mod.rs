@@ -4,6 +4,7 @@ use sdl2::pixels;
 use sdl2::rect::Rect;
 use sdl2::pixels::Color;
 use crate::cpu::Cpu;
+use crate::machines::IO;
 use std::time::{Instant, Duration};
 use std::thread;
 use sdl2::event::Event;
@@ -15,10 +16,7 @@ const GREEN: Color = Color::RGB(0, 255, 0);
 const WHITE: Color = Color::RGB(255, 255, 255);
 const RED: Color = Color::RGB(255, 0, 0);
 
-pub trait IO {
-    fn input(&self, port: u8) -> u8;
-    fn output(&mut self, port: u8, val: u8);
-}
+
 
 pub struct SpaceInvaders {
     io: SpaceInvadersIO,
@@ -30,9 +28,9 @@ pub struct SpaceInvaders {
 impl SpaceInvaders {
     pub fn new(bytes: Vec<u8>) -> Self {
         let sdl_context = sdl2::init().unwrap();
-        let speaker = Speaker::new(&sdl_context);
+        let speaker = SpaceInvadersSpeaker::new(&sdl_context);
         SpaceInvaders {
-            io: SpaceInvadersIO::new(speaker),
+            io: SpaceInvadersIO::new(Box::new(speaker)),
             cpu: Cpu::new(bytes),
             screen: Screen::new(&sdl_context).unwrap(),
             controller: Box::new(Sdl2KeyboardController::new(sdl_context))
@@ -141,11 +139,11 @@ pub struct SpaceInvadersIO {
     shift_amount: u8,
     prev_port3_val: u8,
     prev_port5_val: u8,
-    speaker: Speaker
+    speaker: Box<dyn Speaker>
 }
 
 impl SpaceInvadersIO {
-    pub fn new(speaker: Speaker) -> Self {
+    pub fn new(speaker: Box<dyn Speaker>) -> Self {
         Self {
             shift_register: 0,
             shift_amount: 0,
@@ -153,7 +151,7 @@ impl SpaceInvadersIO {
             port2: 0b0000_0000,
             prev_port3_val: 0,
             prev_port5_val: 0,
-            speaker
+            speaker: speaker
         }
     }
 }
@@ -178,19 +176,28 @@ impl IO for SpaceInvadersIO {
             },
             3 => {
                 if val != self.prev_port3_val {
+                    if val & 0x1 == 1 && self.prev_port3_val & 0x1 == 0 {
+                        self.speaker.start_wav_file("resources/spaceinvaders/ufo.wav");
+                    } else if val & 0x1 == 0 && self.prev_port3_val & 0x1 == 1 {
+                        self.speaker.stop_wav_file("resources/spaceinvaders/ufo.wav");
+                    }
                     if val & 0x2 == 2 && self.prev_port3_val & 0x2 == 0 {
-                        self.speaker.play_wave_file("shoot.wav");
+                        self.speaker.play_wav_file("resources/spaceinvaders/shoot.wav");
                     }
                     if val & 0x4 == 4 && self.prev_port3_val & 0x4 == 0 {
-                        self.speaker.play_wave_file("player_dies.wav");
+                        self.speaker.play_wav_file("resources/spaceinvaders/player_dies.wav");
                     }
                     if val & 0x8 == 8 && self.prev_port3_val & 0x8 == 0 {
-                        self.speaker.play_wave_file("invader_dies.wav");
+                        self.speaker.play_wav_file("resources/spaceinvaders/invader_dies.wav");
                     }
                     self.prev_port3_val = val;
                 }
             },
             5 => {
+                if val & 0x1 == 1 && self.prev_port5_val & 0x1 == 0 {
+                    self.speaker.play_wav_file("resources/spaceinvaders/bomp.wav")
+                }
+                self.prev_port5_val = val;
             },
             6 => {},
             _ => panic!("cannot write to port {}", port)
@@ -243,11 +250,10 @@ impl Controller for Sdl2KeyboardController {
         self.event_pump.poll_iter().filter_map(|event| {
             match event {
                 Event::Quit{..} => {
-                    panic!("bye ");
+                    panic!();
                     None
                 }
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                    panic!("bye ");
                     None
                 },
                 Event::KeyDown { keycode: Some(Keycode::C), .. } => {
@@ -318,22 +324,43 @@ impl Screen {
     }
 }
 
-pub struct Speaker {
+pub trait Speaker {
+    fn start_wav_file(&mut self, file_name: &str);
+    fn stop_wav_file(&mut self, file_name: &str);
+    fn play_wav_file(&mut self, file_name: &str);
+
+}
+
+pub struct SpaceInvadersSpeaker {
     audio: sdl2::AudioSubsystem,
     sounds: HashMap<String, Music<'static>>
 }
 
-impl Speaker {
+impl SpaceInvadersSpeaker {
     pub fn new(sdl_context: &sdl2::Sdl) -> Self {
         sdl2::mixer::open_audio(11025, sdl2::mixer::AUDIO_U8, sdl2::mixer::DEFAULT_CHANNELS, 1_024).unwrap();
         sdl2::mixer::init(sdl2::mixer::InitFlag::all()).unwrap();
-        sdl2::mixer::allocate_channels(3);
-        Speaker {
+        sdl2::mixer::allocate_channels(6);
+        SpaceInvadersSpeaker {
             audio: sdl_context.audio().unwrap(),
             sounds: HashMap::new()
         }
     }
-    fn play_wave_file(&mut self, file_name: &str) {
+}
+
+impl Speaker for SpaceInvadersSpeaker {
+    fn start_wav_file(&mut self, file_name: &str) {
+        if !self.sounds.contains_key(file_name) {
+            self.sounds.insert(file_name.to_string(), Music::from_file(file_name).unwrap());
+        }
+        self.sounds.get(file_name).unwrap().play(-1).unwrap()
+    }
+    fn stop_wav_file(&mut self, file_name: &str) {
+        if let Some(sound) = self.sounds.get(file_name) {
+            sound.play(0).unwrap();
+        }
+    }
+    fn play_wav_file(&mut self, file_name: &str) {
         if !self.sounds.contains_key(file_name) {
             self.sounds.insert(file_name.to_string(), Music::from_file(file_name).unwrap());
         }

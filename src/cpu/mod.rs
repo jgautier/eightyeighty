@@ -1,4 +1,4 @@
-use crate::machine::IO;
+use crate::machines::IO;
 
 #[derive(Debug)]
 enum Register {
@@ -1665,7 +1665,20 @@ fn print_debug_info(state: &State, op: &Op, counter: u64) -> String {
 mod test {
   use std::fs;
   use crate::cpu::Cpu;
-  use crate::machine::SpaceInvadersIO;
+  use crate::machines::spaceinvaders::SpaceInvadersIO;
+  use crate::machines::spaceinvaders::Speaker;
+  struct TestSpeaker {}
+  impl Speaker for TestSpeaker {
+    fn play_wav_file(&mut self, _: &str) {
+      // no op
+    }
+    fn start_wav_file(&mut self, _: &str) {
+      // no op
+    }
+    fn stop_wav_file(&mut self, _: &str) {
+     // no op
+    }
+  }
   #[test]
   fn cpudiag() {
     let result = fs::read("cpudiag.bin");
@@ -1682,8 +1695,7 @@ mod test {
         bytes[0x59c] = 0xc3;
         bytes[0x59d] = 0xc2;
         bytes[0x59e] = 0x05;
-        println!("{:x}", bytes[0x0309]);
-        let space_invaders_io = &mut SpaceInvadersIO::new();
+        let space_invaders_io = &mut SpaceInvadersIO::new(Box::new(TestSpeaker{}));
         let mut cpu = Cpu::new(bytes);
         cpu.run(space_invaders_io);
     } else {
