@@ -1,0 +1,32 @@
+[package]
+name = "emulator"
+version = "0.1.0"
+authors = ["Julian Gautier <juliangautier@juliangautier.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[target.'cfg(not(target_family="wasm"))'.dependencies.sdl2]
+version = "0.35.1"
+default-features = false
+features = ["mixer"]
+
+[target.'cfg(target_family="wasm")'.dependencies]
+wasm-bindgen = "0.2.63"
+
+[target.'cfg(target_family="wasm")'.dependencies.web-sys]
+version = "0.3.56"
+features = [
+    "CanvasRenderingContext2d",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "console",
+    "Window",
+    "Headers",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    "KeyboardEvent"
+]

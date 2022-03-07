@@ -1,5 +1,6 @@
-use crate::machines::IO;
-
+use crate::machines::{IO, SpaceInvadersIO};
+use std::cell::RefCell;
+use std::rc::Rc;
 #[derive(Debug)]
 enum Register {
   A,
@@ -310,8 +311,8 @@ pub struct State {
   e: u8,
   h: u8,
   l: u8,
-  sp: usize,
-  pc: usize,
+  pub sp: usize,
+  pub pc: usize,
   pub memory: [u8; 64000],
   flags: Flags
 }
@@ -762,7 +763,7 @@ impl Cpu {
     }
   }
 
-  fn execute_op(&mut self, op_code: Op, io: &mut dyn IO) -> u8 {
+  fn execute_op(&mut self, op_code: Op, io: &RefCell<dyn IO>) -> u8 {
     self.op_history.push(op_code.print());
     self.state.pc += &op_code.get_size();
     match &op_code {
@@ -1060,17 +1061,11 @@ impl Cpu {
       Op::Jnz(val) => {
         if self.state.flags.z == 0 {
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Jnz Here");
-          }
         }
         10
       }
       Op::Jmp(val) => {
         self.state.pc = *val;
-        if self.state.pc == 28418 {
-          panic!("Jmp Here");
-        }
         10
       }
       Op::Cnz(val) => {
@@ -1080,9 +1075,6 @@ impl Cpu {
           self.state.memory[self.state.sp - 2] = return_address[0];
           self.state.sp -= 2;
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Cnz Here");
-          }
           17
         } else {
           11
@@ -1117,9 +1109,6 @@ impl Cpu {
       Op::Jz(val) => {
         if self.state.flags.z == 1 {
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Jz Here");
-          }
         }
         10
       }
@@ -1130,9 +1119,6 @@ impl Cpu {
           self.state.memory[self.state.sp - 2] = return_address[0];
           self.state.sp -= 2;
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Cz Here");
-          }
           17
         } else {
           11
@@ -1170,9 +1156,6 @@ impl Cpu {
       Op::Rnc() => {
         if self.state.flags.cy == 0 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp], self.state.memory[self.state.sp + 1]]) as usize;
-          if self.state.pc == 28418 {
-            panic!("Rnc Here");
-          }
           self.state.sp += 2; 
           11
         } else {
@@ -1182,9 +1165,6 @@ impl Cpu {
       Op::Jnc(val) => {
         if self.state.flags.cy == 0 {
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Jnc Here");
-          }
         }
         10
       }
@@ -1195,9 +1175,6 @@ impl Cpu {
           self.state.memory[self.state.sp - 2] = return_address[0];
           self.state.sp -= 2;
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Cnc Here");
-          }
           17
         } else {
           11
@@ -1217,9 +1194,6 @@ impl Cpu {
       Op::Rc() => {
         if self.state.flags.cy == 1 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp], self.state.memory[self.state.sp + 1]]) as usize;
-          if self.state.pc == 28418 {
-            panic!("Rc Here");
-          }
           self.state.sp += 2;
           11
         } else {
@@ -1239,9 +1213,6 @@ impl Cpu {
           self.state.memory[self.state.sp - 2] = return_address[0];
           self.state.sp -= 2;
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Cc Here");
-          }
           17
         } else {
           11
@@ -1262,9 +1233,6 @@ impl Cpu {
       Op::Rpo() => {
         if self.state.flags.p == 0 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp], self.state.memory[self.state.sp + 1]]) as usize;
-          if self.state.pc == 28418 {
-            panic!("Rpo Here");
-          }
           self.state.sp += 2; 
           11
         } else {
@@ -1274,9 +1242,6 @@ impl Cpu {
       Op::Jpo(val) => {
         if self.state.flags.p == 0 {
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Jpo Here");
-          }
         }
         10
       }
@@ -1292,9 +1257,6 @@ impl Cpu {
           self.state.memory[self.state.sp - 2] = return_address[0];
           self.state.sp -= 2;
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Cpo Here");
-          }
           17
         } else {
           11
@@ -1314,9 +1276,6 @@ impl Cpu {
       Op::Rpe() => {
         if self.state.flags.p == 1 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp], self.state.memory[self.state.sp + 1]]) as usize;
-          if self.state.pc == 28418 {
-            panic!("Rpe Here");
-          }
           self.state.sp += 2; 
           11
         } else {
@@ -1325,17 +1284,11 @@ impl Cpu {
       }
       Op::Pchl() => {
         self.state.pc = self.state.get_register_16(&Register::Hl) as usize;
-        if self.state.pc == 28418 {
-          panic!("Pchl Here");
-        }
         5
       }
       Op::Jpe(val) => {
         if self.state.flags.p == 1 {
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Jpe Here");
-          }
         }
         10
       }
@@ -1355,9 +1308,6 @@ impl Cpu {
           self.state.memory[self.state.sp - 2] = return_address[0];
           self.state.sp -= 2;
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Cpe Here");
-          }
           17
         } else {
           11
@@ -1377,9 +1327,6 @@ impl Cpu {
       Op::Rp() => {
         if self.state.flags.s == 0 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp], self.state.memory[self.state.sp + 1]]) as usize;
-          if self.state.pc == 28418 {
-            panic!("Rp Here");
-          }
           self.state.sp += 2; 
           11
         } else {
@@ -1387,7 +1334,7 @@ impl Cpu {
         }
       }
       Op::Out(port) => {
-        io.output(*port, self.state.get_register(&Register::A));
+        io.borrow_mut().output(*port, self.state.get_register(&Register::A));
         10
       }
       Op::PopPsw() => {
@@ -1423,9 +1370,6 @@ impl Cpu {
       Op::Jp(val) => {
         if self.state.flags.s == 0 {
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Jp Here");
-          }
         }
         10
       }
@@ -1436,9 +1380,6 @@ impl Cpu {
           self.state.memory[self.state.sp - 2] = return_address[0];
           self.state.sp -= 2;
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Cp Here");
-          }
           17
         } else {
           11
@@ -1470,9 +1411,6 @@ impl Cpu {
       Op::Rm() => {
         if self.state.flags.s == 1 {
           self.state.pc = u16::from_le_bytes([self.state.memory[self.state.sp], self.state.memory[self.state.sp + 1]]) as usize;
-          if self.state.pc == 28418 {
-            panic!("Rm Here");
-          }
           self.state.sp += 2; 
           11
         } else {
@@ -1486,9 +1424,6 @@ impl Cpu {
       Op::Jm(val) => {
         if self.state.flags.s == 1 {
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Jm Here");
-          }
         }
         10
       }
@@ -1503,9 +1438,6 @@ impl Cpu {
           self.state.memory[self.state.sp - 2] = return_address[0];
           self.state.sp -= 2;
           self.state.pc = *val;
-          if self.state.pc == 28418 {
-            panic!("Cm Here");
-          }
           17
         } else {
           11
@@ -1522,7 +1454,7 @@ impl Cpu {
         7
       }
       Op::In(port) => {
-        self.state.set_register(&Register::A, io.input(*port));
+        self.state.set_register(&Register::A, io.borrow().input(*port));
         10
       }
       Op::Di() => {
@@ -1560,7 +1492,7 @@ impl Cpu {
     }
   }
 
-  pub fn run(&mut self, io: &mut dyn IO) {
+  pub fn run(&mut self, io: &RefCell<dyn IO>) {
     let mut n = 0;
     while self.state.pc < self.program_size {
       n += 1;
@@ -1576,7 +1508,7 @@ impl Cpu {
     }
   }
 
-  pub fn execute_next_op(&mut self, io: &mut dyn IO) -> Result<u8, &str> {
+  pub fn execute_next_op(&mut self, io: &RefCell<dyn IO>) -> Result<u8, &str> {
       let op_code = self.read_next_op();
       match op_code {
         Ok(op) => {
@@ -1665,8 +1597,9 @@ fn print_debug_info(state: &State, op: &Op, counter: u64) -> String {
 mod test {
   use std::fs;
   use crate::cpu::Cpu;
-  use crate::machines::spaceinvaders::SpaceInvadersIO;
-  use crate::machines::spaceinvaders::Speaker;
+  use crate::machines::SpaceInvadersIO;
+  use crate::machines::Speaker;
+  use std::cell::RefCell;
   struct TestSpeaker {}
   impl Speaker for TestSpeaker {
     fn play_wav_file(&mut self, _: &str) {
@@ -1695,7 +1628,7 @@ mod test {
         bytes[0x59c] = 0xc3;
         bytes[0x59d] = 0xc2;
         bytes[0x59e] = 0x05;
-        let space_invaders_io = &mut SpaceInvadersIO::new(Box::new(TestSpeaker{}));
+        let space_invaders_io = &RefCell::new(SpaceInvadersIO::new());
         let mut cpu = Cpu::new(bytes);
         cpu.run(space_invaders_io);
     } else {

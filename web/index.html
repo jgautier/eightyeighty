@@ -1,0 +1,15 @@
+<html>
+    <head>
+        <script type="module" src="pkg/web.js"></script>
+        <script type="module">
+            import init, {start_spaceinvaders} from './pkg/web.js'
+            init()
+            window.onload = function () {
+                start_spaceinvaders()
+            }
+        </script>
+    </head>
+    <body>
+        <canvas id="canvas"></canvas>
+    </body>
+</html>
