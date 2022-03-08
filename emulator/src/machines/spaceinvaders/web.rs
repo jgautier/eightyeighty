@@ -1,18 +1,68 @@
 use std::cell::RefCell;
-use crate::machines::{Screen, Speaker, Controller, ButtonState, Button, Player, SpaceInvaders, SpaceInvadersIO, Machine};
+use crate::machines::{Screen, Speaker, Controller, ButtonState, Button, Player, Machine};
+use crate::machines::spaceinvaders::{SpaceInvaders, SpaceInvadersIO};
 use crate::cpu::Cpu;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{Window, KeyboardEvent, CanvasRenderingContext2d};
+use web_sys::{Window, KeyboardEvent, CanvasRenderingContext2d, HtmlAudioElement};
 use std::rc::Rc;
 use std::time::{Instant, Duration};
 use std::thread;
 use std::convert::TryInto;
+use std::collections::HashMap;
+
+const RESOURCE_PREFIX: &str = "/resources/spaceinvaders/";
+
+pub struct WebSpeaker {
+    sounds: HashMap<String, HtmlAudioElement>
+}
+
+impl WebSpeaker {
+    fn new() -> Self {
+        WebSpeaker {
+            sounds: HashMap::new()
+        }
+    }
+}
+
+impl Speaker for WebSpeaker {
+    fn start_wav_file(&mut self, file_name: &str) {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let file_name = &(RESOURCE_PREFIX.to_string() + file_name);
+        if !self.sounds.contains_key(file_name) {
+            let audioElement = HtmlAudioElement::new_with_src(file_name).unwrap();        
+            document.append_with_node_1(&audioElement);
+            self.sounds.insert(file_name.to_string(), audioElement);
+            self.sounds.get(file_name).unwrap().set_loop(true);
+        }
+        self.sounds.get(file_name).unwrap().play();
+    }
+    fn stop_wav_file(&mut self, file_name: &str) {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let file_name = &(RESOURCE_PREFIX.to_string() + file_name);
+        if self.sounds.contains_key(file_name) {
+            self.sounds.get(file_name).unwrap().pause();
+        }
+    }
+    fn play_wav_file(&mut self, file_name: &str) {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let file_name = &(RESOURCE_PREFIX.to_string() + file_name);
+        if !self.sounds.contains_key(file_name) {
+            let audioElement = HtmlAudioElement::new_with_src(file_name).unwrap();        
+            document.append_with_node_1(&audioElement);
+            self.sounds.insert(file_name.to_string(), audioElement);
+        }
+        self.sounds.get(file_name).unwrap().play();
+    }
+}
 
 impl SpaceInvaders {
     pub fn new(bytes: Vec<u8>) -> Self {
         SpaceInvaders {
-            io: RefCell::new(SpaceInvadersIO::new()),
+            io: RefCell::new(SpaceInvadersIO::new(Box::new(WebSpeaker::new()))),
             cpu: Cpu::new(bytes),
             screen: Box::new(WebScreen::new()),
             controller: Box::new(KeyboardController::new())
@@ -135,11 +185,12 @@ impl WebScreen {
 
 impl Screen for WebScreen {
     fn clear(&mut self) {
-        self.context.clear_rect(0f64, 0f64, (224 * 4) as f64, (256 * 4) as f64);
+        self.context.set_fill_style(&"black".into());
+        self.context.fill_rect(0f64, 0f64, (224 * 4) as f64, (256 * 4) as f64);
     }
 
     fn draw(&mut self, x: i32, y: i32, color: (u8, u8, u8)) {
-        self.context.set_fill_style(&"black".into());
+        self.context.set_fill_style(&format!("rgb({},{},{}", color.0, color.1, color.2).into());
         self.context.fill_rect((x * 4) as f64, (y * 4) as f64, 4.0, 4.0);
     }
 

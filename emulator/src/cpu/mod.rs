@@ -1,4 +1,4 @@
-use crate::machines::{IO, SpaceInvadersIO};
+use crate::machines::IO;
 use std::cell::RefCell;
 use std::rc::Rc;
 #[derive(Debug)]
@@ -1597,7 +1597,7 @@ fn print_debug_info(state: &State, op: &Op, counter: u64) -> String {
 mod test {
   use std::fs;
   use crate::cpu::Cpu;
-  use crate::machines::SpaceInvadersIO;
+  use crate::machines::spaceinvaders::SpaceInvadersIO;
   use crate::machines::Speaker;
   use std::cell::RefCell;
   struct TestSpeaker {}
@@ -1628,7 +1628,7 @@ mod test {
         bytes[0x59c] = 0xc3;
         bytes[0x59d] = 0xc2;
         bytes[0x59e] = 0x05;
-        let space_invaders_io = &RefCell::new(SpaceInvadersIO::new());
+        let space_invaders_io = &RefCell::new(SpaceInvadersIO::new(Box::new(TestSpeaker{})));
         let mut cpu = Cpu::new(bytes);
         cpu.run(space_invaders_io);
     } else {

@@ -7,9 +7,8 @@ use web_sys::{Window, Request, RequestInit, RequestMode, Response, KeyboardEvent
 use std::fs;
 use emulator::machines::IO;
 use emulator::machines::Speaker;
-use emulator::machines::SpaceInvadersIO;
+use emulator::machines::spaceinvaders::{SpaceInvadersIO, SpaceInvaders};
 use emulator::machines::{Controller, Player, ButtonState, Button};
-use emulator::machines::SpaceInvaders;
 use wasm_bindgen_futures::JsFuture;
 use std::rc::Rc;
 use std::cell::RefCell;

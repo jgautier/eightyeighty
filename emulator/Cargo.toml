@@ -28,5 +28,7 @@ features = [
     "RequestInit",
     "RequestMode",
     "Response",
-    "KeyboardEvent"
+    "KeyboardEvent",
+    "HtmlAudioElement",
+    "HtmlMediaElement"
 ]

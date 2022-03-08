@@ -9,7 +9,9 @@ use std::time::{Instant, Duration};
 use std::thread;
 use std::convert::TryInto;
 use crate::cpu::Cpu;
-use crate::machines::{Screen, Speaker, Controller, ButtonState, Button, Player, SpaceInvaders, SpaceInvadersIO, Machine};
+use crate::machines::{Screen, Speaker, Controller, ButtonState, Button, Player, Machine};
+use crate::machines::spaceinvaders::{SpaceInvaders, SpaceInvadersIO};
+
 pub struct Sdl2Screen {
     canvas: sdl2::render::WindowCanvas
 }
@@ -48,6 +50,8 @@ impl Screen for Sdl2Screen {
     }
 }
 
+const RESOURCE_PREFIX: &str = "resources/spaceinvaders/";
+
 pub enum Sound {
     PlayerShoot
 }
@@ -58,8 +62,7 @@ pub struct SpaceInvadersSpeaker {
 }
 
 impl SpaceInvadersSpeaker {
-    pub fn new() -> Self {
-        let sdl_context = sdl2::init().unwrap();
+    pub fn new(sdl_context: &sdl2::Sdl) -> Self {
         sdl2::mixer::open_audio(11025, sdl2::mixer::AUDIO_U8, sdl2::mixer::DEFAULT_CHANNELS, 1_024).unwrap();
         sdl2::mixer::init(sdl2::mixer::InitFlag::all()).unwrap();
         sdl2::mixer::allocate_channels(6);
@@ -72,17 +75,20 @@ impl SpaceInvadersSpeaker {
 
 impl Speaker for SpaceInvadersSpeaker {
     fn start_wav_file(&mut self, file_name: &str) {
+        let file_name = &(RESOURCE_PREFIX.to_string() + file_name);
         if !self.sounds.contains_key(file_name) {
             self.sounds.insert(file_name.to_string(), Music::from_file(file_name).unwrap());
         }
         self.sounds.get(file_name).unwrap().play(-1).unwrap()
     }
     fn stop_wav_file(&mut self, file_name: &str) {
+        let file_name = &(RESOURCE_PREFIX.to_string() + file_name);
         if let Some(sound) = self.sounds.get(file_name) {
             sound.play(0).unwrap();
         }
     }
     fn play_wav_file(&mut self, file_name: &str) {
+        let file_name = &(RESOURCE_PREFIX.to_string() + file_name);
         if !self.sounds.contains_key(file_name) {
             self.sounds.insert(file_name.to_string(), Music::from_file(file_name).unwrap());
         }
@@ -154,7 +160,7 @@ impl SpaceInvaders {
     pub fn new(bytes: Vec<u8>) -> Self {
         let sdl_context = sdl2::init().unwrap();
         SpaceInvaders {
-            io: RefCell::new(SpaceInvadersIO::new()),
+            io: RefCell::new(SpaceInvadersIO::new(Box::new(SpaceInvadersSpeaker::new(&sdl_context)))),
             cpu: Cpu::new(bytes),
             screen: Box::new(Sdl2Screen::new(&sdl_context).unwrap()),
             controller: Box::new(KeyboardController::new(sdl_context))
