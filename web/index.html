@@ -3,10 +3,9 @@
         <script type="module" src="pkg/web.js"></script>
         <script type="module">
             import init, {start_spaceinvaders} from './pkg/web.js'
-            init()
-            window.onload = function () {
+            init().then(() => {
                 start_spaceinvaders()
-            }
+            })
         </script>
     </head>
     <body>
