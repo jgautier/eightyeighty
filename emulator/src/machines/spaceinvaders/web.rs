@@ -11,7 +11,7 @@ use std::thread;
 use std::convert::TryInto;
 use std::collections::HashMap;
 
-const RESOURCE_PREFIX: &str = "/resources/spaceinvaders/";
+const RESOURCE_PREFIX: &str = "/eightyeighty/resources/spaceinvaders/";
 
 pub struct WebSpeaker {
     sounds: HashMap<String, HtmlAudioElement>

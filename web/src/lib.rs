@@ -46,7 +46,7 @@ impl Speaker for WebSpeaker {
 pub async fn start_spaceinvaders() {
     let window = web_sys::window().unwrap();
 
-    let url = "/resources/spaceinvaders/invaders";
+    let url = "/eightyeighty/resources/spaceinvaders/invaders";
     let mut opts = RequestInit::new();
     opts.method("GET");
     let request = Request::new_with_str_and_init(&url, &opts).unwrap();
