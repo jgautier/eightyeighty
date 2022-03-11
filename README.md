@@ -4,6 +4,14 @@ Intel 8080 emulator written in rust that runs natively via sdl and on web with w
 
 [Live Demo](https://jgautier.github.io/eightyeighty/web/index.html)
 
+Controls:
+
+* c - insert coin
+* 1 - 1 player
+* left/right arrow - move left right
+* space bar - shoot
+
+
 To run on ubuntu:
 
 ```
