@@ -1,6 +1,6 @@
 Intel 8080 emulator written in rust that runs natively via sdl and on web with webassembly. Currently space invaders has been implemented.
 
-![Screen Shot](/screenshot.jpg?raw=true "Screenshot")
+![Screen Shot](/screenshot.jpeg?raw=true "Screenshot")
 
 [Live Demo](https://jgautier.github.io/eightyeighty/web/index.html)
 
