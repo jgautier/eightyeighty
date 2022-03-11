@@ -19,7 +19,11 @@ wasm-pack build --target web
 ```
 
 Resources used to develop and debug:
+
 [Emulator 101](http://emulator101.com/)
+
 [Rust-8080](https://github.com/Tom-Goring/Rust-8080/)
+
 [space-invaders.rs](https://github.com/cbeust/space-invade.rs)
+
 [i8080 opcodes](https://www.pastraiser.com/cpu/i8080/i8080_opcodes.html)
